@@ -1,0 +1,19 @@
+project_id = "round-local"
+
+[functions.submit-workout]
+verify_jwt = true
+
+[functions.finalize-vote]
+verify_jwt = true
+
+[functions.app-snapshot]
+verify_jwt = true
+
+[functions.clip-upload-url]
+verify_jwt = true
+
+[functions.delete-account]
+verify_jwt = true
+
+[functions.purge-workout-clips]
+verify_jwt = false
