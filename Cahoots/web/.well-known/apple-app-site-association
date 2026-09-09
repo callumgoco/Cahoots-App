@@ -1,0 +1,13 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["PVP9QSJ25G.com.callumoconnor.cahoots"],
+        "components": [
+          { "/": "/join/*", "comment": "Cahoots group invitations" },
+          { "/": "/log/*", "comment": "Cahoots workout deep links" }
+        ]
+      }
+    ]
+  }
+}

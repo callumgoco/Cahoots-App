@@ -1,0 +1,40 @@
+{
+  "configurations" : [
+    {
+      "id" : "8D67DB07-2967-4B6E-A9DA-9C6DDA4FEF68",
+      "name" : "Default",
+      "options" : {
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "codeCoverage" : false,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:Cahoots.xcodeproj",
+      "identifier" : "ECAF6A373025F794000DB486",
+      "name" : "Cahoots"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "skipped" : false,
+      "target" : {
+        "containerPath" : "container:Cahoots.xcodeproj",
+        "identifier" : "ECAF6A443025F795000DB486",
+        "name" : "CahootsTests"
+      }
+    },
+    {
+      "parallelizable" : false,
+      "skipped" : false,
+      "target" : {
+        "containerPath" : "container:Cahoots.xcodeproj",
+        "identifier" : "ECAF6A4E3025F795000DB486",
+        "name" : "CahootsUITests"
+      }
+    }
+  ],
+  "version" : 1
+}
+

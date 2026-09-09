@@ -1,0 +1,11 @@
+// Copy to Configuration.xcconfig, fill the values, and keep that file uncommitted.
+// Do not add a trailing slash to SUPABASE_URL.
+SUPABASE_URL = https://YOUR_PROJECT.supabase.co
+SUPABASE_ANON_KEY = YOUR_PUBLIC_ANON_KEY
+
+// Required before creating a Release archive.
+CAHOOTS_BUNDLE_IDENTIFIER = com.yourcompany.cahoots
+CAHOOTS_INVITE_HOST = invite.yourdomain.com
+CAHOOTS_SUPPORT_EMAIL = support@yourdomain.com
+CAHOOTS_PRIVACY_URL = https://yourdomain.com/privacy
+CAHOOTS_TERMS_URL = https://yourdomain.com/terms

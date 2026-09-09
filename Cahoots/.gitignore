@@ -1,0 +1,12 @@
+Configuration.xcconfig
+*.xcuserstate
+xcuserdata/
+.DS_Store
+.build/
+DerivedData/
+supabase/.temp/
+.env
+.env.*
+!.env.example
+
+.cron_secret_pending
