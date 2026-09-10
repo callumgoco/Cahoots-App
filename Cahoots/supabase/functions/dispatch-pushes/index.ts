@@ -162,7 +162,7 @@ async function flushDigests(
   for (const [userID, userEvents] of byUser) {
     const globalPref = (prefsByUser.get(userID) ?? []).find((row) => row.group_id == null) ?? {
       quiet_hours_end: 7 * 60,
-      friend_activity_mode: "digest",
+      friend_activity_mode: "immediate",
     };
     if (globalPref.friend_activity_mode === "off") {
       await markDigested(admin, userEvents.map((event) => event.id));

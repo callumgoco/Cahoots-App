@@ -17,20 +17,26 @@ Deno.serve(async (request) => {
 
     const { error: limitError } = await client.rpc("consume_rate_limit", {
       action_input: "clip_upload_url",
-      max_hits: 20,
-      window_seconds: 3600,
     });
     if (limitError) return json({ message: "rate_limited" }, 429);
 
     const body = await request.json();
     const challengeID = body.challengeID ?? body.challenge_id;
-    const requirementDate = body.requirementDate ?? body.requirement_date;
+    const requirementDateRaw = body.requirementDate ?? body.requirement_date;
     const clipID = body.clipID ?? body.clip_id ?? crypto.randomUUID();
     let groupID = body.groupID ?? body.group_id;
 
-    if (!challengeID || !requirementDate) {
+    if (!challengeID || !requirementDateRaw) {
       return json({ message: "challengeID and requirementDate are required" }, 422);
     }
+
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!serviceKey) return json({ message: "Server misconfigured" }, 500);
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey);
+
+    // Promote due scheduled challenges before the status gate so uploads do not
+    // wait solely on the 15-minute activate-due-challenges cron.
+    await admin.rpc("activate_due_challenges");
 
     const { data: challenge, error: challengeError } = await client
       .from("challenges")
@@ -43,12 +49,16 @@ Deno.serve(async (request) => {
       return json({ message: "Challenge is not accepting uploads" }, 422);
     }
 
-    const dateToken = String(requirementDate).slice(0, 10);
-    const storagePath = `${groupID}/${challengeID}/${dateToken}/${userData.user.id}/${clipID}.mov`;
-
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!serviceKey) return json({ message: "Server misconfigured" }, 500);
-    const admin = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey);
+    const dateToken = String(requirementDateRaw).match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
+    if (!dateToken) return json({ message: "requirementDate must be yyyy-MM-dd" }, 422);
+    // Lowercase UUID segments so paths match Postgres uuid::text checks in accept_submission.
+    const storagePath = [
+      String(groupID).toLowerCase(),
+      String(challengeID).toLowerCase(),
+      dateToken,
+      String(userData.user.id).toLowerCase(),
+      `${String(clipID).toLowerCase()}.mov`,
+    ].join("/");
 
     const { data: signed, error: signError } = await admin.storage
       .from("workout-proofs")

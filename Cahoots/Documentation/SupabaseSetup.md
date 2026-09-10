@@ -66,7 +66,7 @@ Group-scoped tables are in the Realtime publication: `challenge_proposals`, `vot
 
 - `finalize-expired-votes` every 5 minutes
 - `activate-due-challenges` / `complete-due-challenges` every 15 minutes
-- `purge-expired-workout-clips` daily at 03:00 UTC (also removes orphan `workout-proofs` objects older than 24h)
+- `purge-expired-workout-clips` daily at 03:00 UTC (clips past deadline + 48h or on ended rounds; orphan `workout-proofs` objects older than 24h; newer check-ins also drop that member’s older-day clips)
 - `dispatch-pushes` every minute (no-ops until Vault `cron_secret` is set)
 
 ## Production checklist

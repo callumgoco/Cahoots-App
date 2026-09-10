@@ -2,14 +2,16 @@ import Foundation
 import UserNotifications
 
 enum CahootsNotificationKind: String, Codable, Sendable {
-    case daily, evening, deadline, vote
+    case daily, evening, deadline, vote, voteOpened, roundStarting
 
     var priority: Int {
         switch self {
-        case .vote: 0
-        case .deadline: 1
-        case .evening: 2
-        case .daily: 3
+        case .voteOpened: 0
+        case .vote: 1
+        case .roundStarting: 2
+        case .deadline: 3
+        case .evening: 4
+        case .daily: 5
         }
     }
 }
@@ -21,6 +23,8 @@ struct NotificationPlanItem: Identifiable, Hashable, Sendable {
     var groupID: UUID
     var challengeID: UUID?
     var proposalID: UUID?
+    /// Optional lock-screen body; when nil, `NotificationService` uses the kind’s default copy.
+    var bodyOverride: String? = nil
 }
 
 protocol NotificationScheduling: Sendable {
@@ -49,7 +53,7 @@ actor NotificationService: NotificationScheduling {
         }
         center.removePendingNotificationRequests(withIdentifiers: existing)
         for item in plan where item.fireDate > .now {
-            let content = content(for: item.kind)
+            let content = content(for: item)
             let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: item.fireDate)
             let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
             try? await center.add(.init(identifier: item.id, content: content, trigger: trigger))
@@ -60,23 +64,41 @@ actor NotificationService: NotificationScheduling {
         await UNUserNotificationCenter.current().pendingNotificationRequests().map(\.identifier)
     }
 
-    private func content(for kind: CahootsNotificationKind) -> UNMutableNotificationContent {
+    private func content(for item: NotificationPlanItem) -> UNMutableNotificationContent {
         let content = UNMutableNotificationContent()
         content.sound = .default
-        switch kind {
+        switch item.kind {
         case .daily:
             content.title = String(localized: "Your Cahoots check-in")
-            content.body = String(localized: "A scheduled requirement is ready when you are.")
+            content.body = item.bodyOverride ?? String(localized: "A scheduled requirement is ready when you are.")
         case .evening:
             content.title = String(localized: "A check-in is still open")
-            content.body = String(localized: "There is still time to check in today.")
+            content.body = item.bodyOverride ?? String(localized: "There is still time to check in today.")
         case .deadline:
             content.title = String(localized: "Today’s challenge closes soon")
-            content.body = String(localized: "Your scheduled check-in window closes in 30 minutes.")
+            content.body = item.bodyOverride ?? String(localized: "Your scheduled check-in window closes in 30 minutes.")
         case .vote:
             content.title = String(localized: "Voting closes soon")
-            content.body = String(localized: "Review the group proposal before voting closes.")
+            content.body = item.bodyOverride ?? String(localized: "Review the group proposal before voting closes.")
+        case .voteOpened:
+            content.title = CrewUpdateCopy.voteOpenedLocalTitle()
+            content.body = item.bodyOverride ?? CrewUpdateCopy.voteOpenedLocalBody()
+        case .roundStarting:
+            content.title = CrewUpdateCopy.roundStartingLocalTitle()
+            content.body = item.bodyOverride ?? String(localized: "A scheduled round begins today. Open Today to get ready.")
         }
+        var userInfo: [AnyHashable: Any] = [
+            "deepLink": AppRoute.deepLink(for: item),
+            "kind": item.kind.rawValue,
+            "groupID": item.groupID.uuidString
+        ]
+        if let challengeID = item.challengeID {
+            userInfo["challengeID"] = challengeID.uuidString
+        }
+        if let proposalID = item.proposalID {
+            userInfo["proposalID"] = proposalID.uuidString
+        }
+        content.userInfo = userInfo
         return content
     }
 }
@@ -108,11 +130,27 @@ enum NotificationPlanBuilder {
                 }
                 let day = calendar.startOfDay(for: requirementDate)
                 if let reminder = calendar.date(byAdding: .minute, value: reminderMinutes, to: day), reminder > now {
-                    append(.daily, at: reminder, deadline: deadline, groupID: challenge.groupID, challengeID: challenge.id, proposalID: nil, settings: settings, to: &candidates)
+                    append(.daily, at: reminder, deadline: deadline, groupID: challenge.groupID, challengeID: challenge.id, proposalID: nil, settings: settings, bodyOverride: nil, to: &candidates)
                 }
                 if !completed && !recovered {
-                    append(.evening, at: deadline.addingTimeInterval(-2 * 3_600), deadline: deadline, groupID: challenge.groupID, challengeID: challenge.id, proposalID: nil, settings: settings, to: &candidates)
-                    append(.deadline, at: deadline.addingTimeInterval(-30 * 60), deadline: deadline, groupID: challenge.groupID, challengeID: challenge.id, proposalID: nil, settings: settings, to: &candidates)
+                    let eveningBody: String? = {
+                        guard ScheduleEngine.isSameRequirementDay(requirementDate, now, challenge: challenge) else { return nil }
+                        let members = snapshot.memberships
+                            .filter { $0.groupID == challenge.groupID && $0.status == .active }
+                            .compactMap { membership in snapshot.users.first { $0.id == membership.userID } }
+                        let entries = TodayCrewStatusBuilder.statuses(
+                            members: members,
+                            submissions: snapshot.submissions,
+                            recoveries: snapshot.recoveryDays,
+                            challenge: challenge,
+                            now: now,
+                            currentUserID: snapshot.currentUser.id
+                        )
+                        let pendingOthers = entries.filter { !$0.isCurrentUser && $0.status == .pending }.count
+                        return CrewAccountabilityCopy.eveningNudge(pendingOthers: pendingOthers)
+                    }()
+                    append(.evening, at: deadline.addingTimeInterval(-2 * 3_600), deadline: deadline, groupID: challenge.groupID, challengeID: challenge.id, proposalID: nil, settings: settings, bodyOverride: eveningBody, to: &candidates)
+                    append(.deadline, at: deadline.addingTimeInterval(-30 * 60), deadline: deadline, groupID: challenge.groupID, challengeID: challenge.id, proposalID: nil, settings: settings, bodyOverride: nil, to: &candidates)
                 }
             }
         }
@@ -120,11 +158,37 @@ enum NotificationPlanBuilder {
         for proposal in snapshot.proposals where activeGroupIDs.contains(proposal.groupID) && proposal.status == .voting {
             let groupSettings = settings.preference(for: proposal.groupID)
             guard groupSettings.challengeUpdatesEnabled,
-                  !snapshot.votes.contains(where: { $0.proposalID == proposal.id && $0.userID == snapshot.currentUser.id }),
-                  proposal.votingEndsAt.timeIntervalSince(now) >= 10 * 60 else { continue }
+                  proposal.eligibleVoterIDs.contains(snapshot.currentUser.id),
+                  !snapshot.votes.contains(where: { $0.proposalID == proposal.id && $0.userID == snapshot.currentUser.id })
+            else { continue }
+
+            let openedFire = proposal.votingStartsAt.addingTimeInterval(45)
+            if openedFire > now, openedFire < proposal.votingEndsAt {
+                append(.voteOpened, at: openedFire, deadline: proposal.votingEndsAt, groupID: proposal.groupID, challengeID: nil, proposalID: proposal.id, settings: settings, bodyOverride: nil, to: &candidates)
+            }
+
+            guard proposal.votingEndsAt.timeIntervalSince(now) >= 10 * 60 else { continue }
             let preferred = proposal.votingEndsAt.addingTimeInterval(-4 * 3_600)
             let fireDate = preferred > now ? preferred : now.addingTimeInterval(60)
-            append(.vote, at: fireDate, deadline: proposal.votingEndsAt, groupID: proposal.groupID, challengeID: nil, proposalID: proposal.id, settings: settings, to: &candidates)
+            append(.vote, at: fireDate, deadline: proposal.votingEndsAt, groupID: proposal.groupID, challengeID: nil, proposalID: proposal.id, settings: settings, bodyOverride: nil, to: &candidates)
+        }
+
+        for challenge in snapshot.challenges where activeGroupIDs.contains(challenge.groupID) && challenge.status == .scheduled {
+            let groupSettings = settings.preference(for: challenge.groupID)
+            guard groupSettings.challengeUpdatesEnabled,
+                  let calendar = ScheduleEngine.calendar(for: challenge),
+                  let startInstant = ScheduleEngine.startInstant(for: challenge),
+                  startInstant > now
+            else { continue }
+            let startDay = calendar.startOfDay(for: challenge.startDate)
+            let reminderMinutes = groupSettings.reminderMinutes ?? settings.defaultReminderMinutes
+            // Keep the day-of nudge in the morning so it fires before the round is already underway.
+            let notifyMinutes = min(max(0, reminderMinutes), 9 * 60)
+            guard let fireDate = calendar.date(byAdding: .minute, value: notifyMinutes, to: startDay),
+                  let dayEnd = calendar.date(byAdding: .day, value: 1, to: startDay),
+                  fireDate > now
+            else { continue }
+            append(.roundStarting, at: fireDate, deadline: dayEnd, groupID: challenge.groupID, challengeID: challenge.id, proposalID: nil, settings: settings, bodyOverride: nil, to: &candidates)
         }
 
         return candidates
@@ -142,6 +206,7 @@ enum NotificationPlanBuilder {
         challengeID: UUID?,
         proposalID: UUID?,
         settings: UserNotificationSettings,
+        bodyOverride: String?,
         to candidates: inout [NotificationPlanItem]
     ) {
         guard let fireDate = adjustedForQuietHours(proposedDate, deadline: deadline, settings: settings), fireDate < deadline else { return }
@@ -150,7 +215,8 @@ enum NotificationPlanBuilder {
         candidates.append(.init(
             id: "\(AppDefaults.notificationPrefix)\(kind.rawValue).\(groupID.uuidString).\(subject).\(dateToken)",
             kind: kind, fireDate: fireDate, groupID: groupID,
-            challengeID: challengeID, proposalID: proposalID
+            challengeID: challengeID, proposalID: proposalID,
+            bodyOverride: bodyOverride
         ))
     }
 

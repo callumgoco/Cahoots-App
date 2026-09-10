@@ -333,7 +333,7 @@ struct GroupNotificationSettings: Identifiable, Codable, Hashable, Sendable {
     var reminderMinutes: Int?
 
     static func defaults(groupID: UUID) -> GroupNotificationSettings {
-        .init(groupID: groupID, personalRemindersEnabled: true, friendActivityMode: .digest, challengeUpdatesEnabled: true, reminderMinutes: nil)
+        .init(groupID: groupID, personalRemindersEnabled: true, friendActivityMode: .immediate, challengeUpdatesEnabled: true, reminderMinutes: nil)
     }
 }
 

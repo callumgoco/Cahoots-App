@@ -8,6 +8,8 @@ https://<CAHOOTS_INVITE_HOST>/join/ABC123
 
 Development builds also accept `cahoots://join/ABC123`. Codes must be exactly six alphanumeric characters. The app validates the configured host and path, retains a valid pending route through onboarding/authentication, and always asks for confirmation before joining.
 
+Check-in and vote notification deep links use `cahoots://log/{groupID}` and `cahoots://vote/{groupID}/{proposalID}` (HTTPS equivalents on the invite host are also parsed).
+
 ## Universal-link deployment
 
 A checked-in template is at [`web/.well-known/apple-app-site-association`](../web/.well-known/apple-app-site-association). The production invite host must serve that unsigned JSON at:

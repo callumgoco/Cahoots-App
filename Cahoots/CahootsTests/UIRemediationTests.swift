@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import UIKit
 @testable import Cahoots
 
 @MainActor
@@ -47,11 +48,27 @@ struct UIRemediationTests {
         #expect(otherIDs.contains { AvatarMark.forUser($0) != first || AvatarMark.paletteColor(for: $0) != AvatarMark.paletteColor(for: userID) })
     }
 
+    @Test func colorThemesProvideDistinctLightAndDarkPalettes() {
+        #expect(AppColorTheme.allCases.count == 7)
+        for theme in AppColorTheme.allCases {
+            let light = theme.palette(for: .light)
+            let dark = theme.palette(for: .dark)
+            #expect(light.page != dark.page || light.ink != dark.ink)
+            #expect(light.ink != light.page)
+            #expect(dark.ink != dark.page)
+        }
+        AppColorThemeBridge.current = .sky
+        #expect(AppColorThemeBridge.current == .sky)
+        AppColorThemeBridge.current = .mint
+    }
+
     @Test func friendFacingSyncCopyAvoidsProvisionalLanguage() {
         #expect(FriendFacingCopy.syncLabel(for: .waiting) == "Saved on this phone")
         #expect(FriendFacingCopy.syncLabel(for: .failed) == "Saved on this phone")
         #expect(FriendFacingCopy.missedWindow == "Missed today’s window")
         #expect(!FriendFacingCopy.syncLabel(for: .waiting).localizedCaseInsensitiveContains("provisional"))
+        #expect(FriendFacingCopy.syncExplanation(for: .waiting).localizedCaseInsensitiveContains("crew"))
+        #expect(FriendFacingCopy.syncExplanation(for: .failed).localizedCaseInsensitiveContains("retry"))
     }
 
     @Test func weekStripMarksCompletedMissedAndRestDays() {
@@ -84,5 +101,96 @@ struct UIRemediationTests {
         #expect(tokens[1].state == .rest)
         #expect(tokens[2].state == .today)
         #expect(tokens[3].state == .rest || tokens[3].state == .upcoming)
+    }
+
+    @Test func leaderboardListsSmallCrewsInsteadOfBlanking() {
+        #expect(LeaderboardStandingsLayout.showsPodium(entryCount: 0, isAccessibilitySize: false) == false)
+        #expect(LeaderboardStandingsLayout.showsPodium(entryCount: 2, isAccessibilitySize: false) == false)
+        #expect(LeaderboardStandingsLayout.showsPodium(entryCount: 3, isAccessibilitySize: false))
+        #expect(LeaderboardStandingsLayout.showsPodium(entryCount: 4, isAccessibilitySize: true) == false)
+
+        #expect(LeaderboardStandingsLayout.showsDuel(entryCount: 2, isAccessibilitySize: false))
+        #expect(LeaderboardStandingsLayout.showsDuel(entryCount: 2, isAccessibilitySize: true) == false)
+        #expect(LeaderboardStandingsLayout.showsDuel(entryCount: 3, isAccessibilitySize: false) == false)
+
+        let two = ["a", "b"]
+        #expect(LeaderboardStandingsLayout.listEntries(from: two, showPodium: false) == two)
+        #expect(LeaderboardStandingsLayout.listEntries(from: two, showPodium: true).isEmpty)
+        #expect(LeaderboardStandingsLayout.listEntries(from: two, showPodium: false, showDuel: true).isEmpty)
+
+        let four = ["a", "b", "c", "d"]
+        #expect(LeaderboardStandingsLayout.listEntries(from: four, showPodium: true) == ["d"])
+        #expect(LeaderboardStandingsLayout.listEntries(from: four, showPodium: false) == four)
+    }
+
+    @Test func todayCrewStatusBuilderMarksDoneRestAndPending() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let day = calendar.date(from: DateComponents(year: 2026, month: 9, day: 10, hour: 12))!
+        let challenge = CahootsChallenge(
+            id: UUID(), groupID: UUID(), proposalID: nil, title: "Test", activityType: "push-ups",
+            measurementType: .repetitions, minimumQuantity: 15, frequencyType: .daily,
+            scheduledWeekdays: [], timesPerWeek: nil, startDate: day.addingTimeInterval(-5 * 86_400),
+            endDate: day.addingTimeInterval(10 * 86_400), challengeTimezone: "UTC",
+            dailyDeadlineMinutes: 23 * 60, recoveryDayAllowance: 2, status: .active, scoringVersion: 1, createdAt: day
+        )
+        let you = CahootsUser(
+            id: UUID(), appleSubjectID: nil, displayName: "You", avatarPath: nil,
+            timezoneIdentifier: "UTC", createdAt: day, updatedAt: day, deletedAt: nil, showsExactTotals: true
+        )
+        let donePeer = CahootsUser(
+            id: UUID(), appleSubjectID: nil, displayName: "Done Peer", avatarPath: nil,
+            timezoneIdentifier: "UTC", createdAt: day, updatedAt: day, deletedAt: nil, showsExactTotals: true
+        )
+        let restPeer = CahootsUser(
+            id: UUID(), appleSubjectID: nil, displayName: "Rest Peer", avatarPath: nil,
+            timezoneIdentifier: "UTC", createdAt: day, updatedAt: day, deletedAt: nil, showsExactTotals: true
+        )
+        let pendingPeer = CahootsUser(
+            id: UUID(), appleSubjectID: nil, displayName: "Pending Peer", avatarPath: nil,
+            timezoneIdentifier: "UTC", createdAt: day, updatedAt: day, deletedAt: nil, showsExactTotals: true
+        )
+        let submission = Submission(
+            id: UUID(), clientGeneratedID: UUID(), challengeID: challenge.id, userID: donePeer.id,
+            requirementDate: day, quantity: 15, measurementType: .repetitions, completedAt: day,
+            submittedAt: day, syncState: .synced, verificationState: .accepted, createdAt: day, updatedAt: day
+        )
+        let recovery = RecoveryDayUsage(
+            id: UUID(), challengeID: challenge.id, userID: restPeer.id, requirementDate: day, createdAt: day
+        )
+
+        let statuses = TodayCrewStatusBuilder.statuses(
+            members: [pendingPeer, restPeer, donePeer, you],
+            submissions: [submission],
+            recoveries: [recovery],
+            challenge: challenge,
+            now: day,
+            currentUserID: you.id
+        )
+
+        #expect(statuses.count == 4)
+        #expect(statuses.first?.isCurrentUser == true)
+        #expect(statuses.first(where: { $0.user.id == donePeer.id })?.status == .done)
+        #expect(statuses.first(where: { $0.user.id == restPeer.id })?.status == .rest)
+        #expect(statuses.first(where: { $0.user.id == pendingPeer.id })?.status == .pending)
+        #expect(statuses.first(where: { $0.user.id == you.id })?.status == .pending)
+    }
+
+    @Test func roundProgressReportsDayOfSchedule() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let start = calendar.date(from: DateComponents(year: 2026, month: 9, day: 1, hour: 12))!
+        let challenge = CahootsChallenge(
+            id: UUID(), groupID: UUID(), proposalID: nil, title: "Test", activityType: "push-ups",
+            measurementType: .repetitions, minimumQuantity: 15, frequencyType: .daily,
+            scheduledWeekdays: [], timesPerWeek: nil, startDate: start,
+            endDate: start.addingTimeInterval(29 * 86_400), challengeTimezone: "UTC",
+            dailyDeadlineMinutes: 23 * 60, recoveryDayAllowance: 1, status: .active, scoringVersion: 1, createdAt: start
+        )
+        let day10 = calendar.date(byAdding: .day, value: 9, to: start)!
+        let progress = RoundProgress.dayOfRound(challenge: challenge, now: day10)
+        #expect(progress?.current == 10)
+        #expect(progress?.total == 30)
+        #expect(RoundProgress.dayLabel(challenge: challenge, now: day10) == "Day 10 of 30")
     }
 }

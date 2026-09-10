@@ -9,33 +9,49 @@ The plan includes:
 - Daily personal reminders.
 - Evening-incomplete reminders.
 - Thirty-minute deadline warnings.
+- Vote-opened alerts shortly after a proposal starts (when the local plan rebuilds in time).
 - Four-hour vote warnings, or a near-immediate warning when at least ten minutes remain.
+- Round-starting alerts on the morning of a scheduled challenge’s start day.
+- Evening incomplete reminders that mention how many crew-mates still need to check in (no names or quantities on the lock screen).
 
 Identifiers contain the notification type, group, challenge/proposal, and requirement date. Rebuilding atomically removes stale requests for completed challenges, closed votes, left groups, muted groups, and completed/recovery days. Candidates are ordered by fire date and importance, then capped at 60 requests.
 
 Quiet-hour adjustments move a request to quiet-hours end only when it will still fire before its relevant deadline; otherwise the request is omitted. Lock-screen text intentionally contains no workout quantities, points, or media thumbnails.
 
+## Votes & round updates (remote)
+
+When a steward opens a vote, starts a round, a proposal passes, or a scheduled round activates, `private.enqueue_crew_update_pushes` inserts `push_outbox` rows for other members (or all members when there is no actor) who have **Votes & round updates** (`challenge_updates_enabled`) on. Quiet hours defer `send_after` until quiet-hours end in the member’s profile timezone. `dispatch-pushes` delivers them on the next cron tick.
+
+Deep links:
+
+- Vote opened → `cahoots://vote/{groupID}/{proposalID}`
+- Round scheduled / started / proposal passed → `cahoots://log/{groupID}`
+
+These are separate from friend-posted check-in alerts (`friendActivityMode`).
+
 ## Friend-posted alerts (remote)
 
-When a member submits a proof check-in, `submit-workout` fans out to peers:
+When a member submits a proof check-in, `submit-workout` fans out to peers. New accounts and unset prefs default to **immediate**.
 
 | `friendActivityMode` | Behaviour |
 |---|---|
-| `immediate` | Try APNs now; on failure enqueue `push_outbox` for retry |
+| `immediate` (default) | Try APNs now; on failure enqueue `push_outbox` for retry |
 | `digest` | Insert `push_digest_events`; `dispatch-pushes` sends an evening summary after quiet-hours end (local timezone) |
 | `off` | No remote alert |
 
-Quiet hours for immediate mode defer into the digest queue. Completers see “Jordan just posted.” Incomplete members see “Jordan posted — log yours to see it.” Digests summarize counts without quantities. Deep links use `cahoots://log/{groupID}`.
+Quiet hours for immediate mode defer into the digest queue. Completers see “Jordan just posted.” Incomplete members see “Jordan posted — log yours to see it.” Digests summarize counts without quantities. Deep links use `cahoots://log/{groupID}` and are handled on tap by `CahootsAppDelegate` → `AppStore.handleNotificationUserInfo`.
+
+Local reminders embed the same `deepLink` (plus `kind` / `groupID` / optional `proposalID`) in `UNNotificationContent.userInfo`. Vote reminders use `cahoots://vote/{groupID}/{proposalID}` and open Crew → Voting. Round-starting reminders use `cahoots://log/{groupID}` and open Today check-in routing.
 
 `dispatch-pushes` runs every minute via `pg_cron` → `private.invoke_dispatch_pushes()` → Edge Function (requires Vault secret `cron_secret` matching Edge `CRON_SECRET`). Invalid APNs tokens (`410` / `BadDeviceToken` / `Unregistered`) are deleted from `device_push_tokens`.
 
-Vault `cron_secret` is already created on the live project. Copy the matching value from the local gitignored file `Cahoots/.cron_secret_pending` into the Edge secret `CRON_SECRET` (same string). Delete that pending file after you paste it.
+Vault `cron_secret` and Edge `CRON_SECRET` / `APNS_*` are configured on the live project by the operator.
 
 ### Edge secrets (never in the iOS app)
 
 Set on the Supabase project for Edge Functions (Dashboard → Edge Functions → Secrets, or Project Settings → Edge Functions):
 
-- `CRON_SECRET` — must match Vault `cron_secret` (see pending file above)
+- `CRON_SECRET` — must match Vault `cron_secret`
 - `APNS_KEY_ID` — Apple key ID
 - `APNS_TEAM_ID` — Apple team ID (`PVP9QSJ25G`)
 - `APNS_BUNDLE_ID` — `com.callumoconnor.cahoots`

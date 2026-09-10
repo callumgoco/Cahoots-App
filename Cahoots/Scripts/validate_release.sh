@@ -19,7 +19,7 @@ for key in PRODUCT_BUNDLE_IDENTIFIER CAHOOTS_INVITE_HOST CAHOOTS_SUPPORT_EMAIL C
   esac
 done
 
-for icon in CahootsIcon.png CahootsIcon-Dark.png CahootsIcon-Tinted.png; do
+for icon in Cahoots_light.png Cahoots_dark.png Cahoots_tinted.png; do
   if [ ! -s "$project_root/Cahoots/Assets.xcassets/AppIcon.appiconset/$icon" ]; then
     echo "Missing app icon asset: $icon"
     failed=1

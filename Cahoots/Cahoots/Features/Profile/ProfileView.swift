@@ -49,6 +49,8 @@ struct ProfileView: View {
                         } label: {
                             Label("Appearance", systemImage: "circle.lefthalf.filled")
                         }
+                        Divider()
+                        themePicker
                     }
 
                     settingsSection(title: "Safety & privacy") {
@@ -135,30 +137,11 @@ struct ProfileView: View {
     }
 
     private func settingsSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.small) {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(AppColors.secondaryInk)
-                .padding(.horizontal, 4)
-            CahootsCard {
-                VStack(alignment: .leading, spacing: AppSpacing.small) {
-                    content()
-                }
-            }
-        }
+        CahootsSettingsSection(title) { content() }
     }
 
     private func settingsLabel(_ title: String, systemImage: String) -> some View {
-        HStack {
-            Label(title, systemImage: systemImage)
-            Spacer()
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(AppColors.secondaryInk)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(minHeight: 44)
-        .contentShape(Rectangle())
+        CahootsSettingsLabel(title: title, systemImage: systemImage)
     }
 
     private func groupRow(_ group: CahootsGroup) -> some View {
@@ -188,6 +171,48 @@ struct ProfileView: View {
     private var appearanceBinding: Binding<AppearancePreference> {
         Binding(get: { store.snapshot?.appearance ?? .system }, set: { value in Task { await store.setAppearance(value) } })
     }
+
+    private var themePicker: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.small) {
+            Label("Theme", systemImage: "paintpalette.fill")
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(minHeight: 44)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: AppSpacing.small)], spacing: AppSpacing.small) {
+                ForEach(AppColorTheme.allCases) { theme in
+                    Button {
+                        store.setColorTheme(theme)
+                    } label: {
+                        VStack(spacing: 6) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(theme.swatchSoft)
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(theme.swatchBold)
+                                    .padding(10)
+                                    .offset(x: 6, y: 6)
+                            }
+                            .frame(height: 56)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .strokeBorder(
+                                        store.colorTheme == theme ? AppColors.ink : AppColors.ink.opacity(0.12),
+                                        lineWidth: store.colorTheme == theme ? 2.5 : 1
+                                    )
+                            }
+                            Text(theme.displayName)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(store.colorTheme == theme ? AppColors.ink : AppColors.secondaryInk)
+                                .lineLimit(1)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(theme.displayName)
+                    .accessibilityAddTraits(store.colorTheme == theme ? [.isSelected] : [])
+                    .accessibilityIdentifier("profile.theme.\(theme.rawValue)")
+                }
+            }
+        }
+    }
 }
 
 private struct EditNameView: View {
@@ -198,31 +223,41 @@ private struct EditNameView: View {
 
     var body: some View {
         NavigationStack {
-            Form { TextField("Display name", text: $name).textInputAutocapitalization(.words) }
-                .roundFormChrome()
-                .interactiveKeyboardDismiss()
-                .navigationTitle("Edit name").navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(isSaving) }
-                    ToolbarItem(placement: .confirmationAction) {
-                        if isSaving {
-                            ProgressView()
-                        } else {
-                            Button("Save") {
-                                Task {
-                                    isSaving = true
-                                    defer { isSaving = false }
-                                    await store.updateDisplayName(name)
-                                    dismiss()
-                                }
-                            }
-                            .disabled(TextSanitizer.clean(name).count < 2)
-                        }
+            ScrollView {
+                LazyVStack(spacing: AppSpacing.large) {
+                    CahootsSettingsSection("Display name") {
+                        TextField("Display name", text: $name)
+                            .textInputAutocapitalization(.words)
+                            .frame(minHeight: 44)
                     }
                 }
-                .interactiveDismissDisabled(isSaving)
-                .keyboardDoneToolbar()
-                .onAppear { name = store.currentUser?.displayName ?? "" }
+                .padding(AppSpacing.page)
+                .padding(.bottom, 24)
+            }
+            .roundPage()
+            .interactiveKeyboardDismiss()
+            .navigationTitle("Edit name").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(isSaving) }
+                ToolbarItem(placement: .confirmationAction) {
+                    if isSaving {
+                        ProgressView()
+                    } else {
+                        Button("Save") {
+                            Task {
+                                isSaving = true
+                                defer { isSaving = false }
+                                await store.updateDisplayName(name)
+                                dismiss()
+                            }
+                        }
+                        .disabled(TextSanitizer.clean(name).count < 2)
+                    }
+                }
+            }
+            .interactiveDismissDisabled(isSaving)
+            .keyboardDoneToolbar()
+            .onAppear { name = store.currentUser?.displayName ?? "" }
         }
     }
 }
@@ -237,49 +272,78 @@ struct NotificationSettingsView: View {
     @State private var confirmLeaveAfterFailure = false
 
     var body: some View {
-        Form {
-            if settings != nil {
-                Section("Default reminder") {
-                    DatePicker("Reminder time", selection: minutesBinding(\.defaultReminderMinutes), displayedComponents: .hourAndMinute)
-                    authorizationControl
-                    if let savedStatus {
-                        Label(savedStatus, systemImage: autosaveFailed ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
-                            .foregroundStyle(autosaveFailed ? AppColors.danger : AppColors.accent)
-                            .accessibilityIdentifier("notifications.saved")
+        ScrollView {
+            LazyVStack(spacing: AppSpacing.large) {
+                if settings != nil {
+                    CahootsSettingsSection("Default reminder") {
+                        DatePicker("Reminder time", selection: minutesBinding(\.defaultReminderMinutes), displayedComponents: .hourAndMinute)
+                            .frame(minHeight: 44)
+                        Divider()
+                        authorizationControl
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .frame(minHeight: 44)
+                        if let savedStatus {
+                            Divider()
+                            Label(savedStatus, systemImage: autosaveFailed ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
+                                .foregroundStyle(autosaveFailed ? AppColors.danger : AppColors.accent)
+                                .accessibilityIdentifier("notifications.saved")
+                        }
                     }
-                }
-                ForEach(store.activeGroups) { group in
-                    Section("\(group.emoji) \(group.name)") {
-                        if let deadlineLabel = dailyDeadlineLabel(for: group.id) {
-                            Text("Daily check-in deadline · \(deadlineLabel)")
+                    ForEach(store.activeGroups) { group in
+                        CahootsSettingsSection("\(group.emoji) \(group.name)") {
+                            if let deadlineLabel = dailyDeadlineLabel(for: group.id) {
+                                Text("Daily check-in deadline · \(deadlineLabel)")
+                                    .font(.caption)
+                                    .foregroundStyle(AppColors.secondaryInk)
+                                Divider()
+                            }
+                            Toggle("Scheduled reminders", isOn: groupBinding(group.id, \.personalRemindersEnabled))
+                                .frame(minHeight: 44)
+                                .accessibilityIdentifier("notifications.reminders.\(group.id.uuidString)")
+                            Divider()
+                            Toggle("Votes & round updates", isOn: groupBinding(group.id, \.challengeUpdatesEnabled))
+                                .frame(minHeight: 44)
+                                .accessibilityIdentifier("notifications.challengeUpdates.\(group.id.uuidString)")
+                            Text("Vote opened, vote closing soon, and round starting alerts for this crew.")
                                 .font(.caption)
                                 .foregroundStyle(AppColors.secondaryInk)
-                        }
-                        Toggle("Scheduled reminders", isOn: groupBinding(group.id, \.personalRemindersEnabled))
-                            .accessibilityIdentifier("notifications.reminders.\(group.id.uuidString)")
-                        Toggle("Cahoots updates", isOn: groupBinding(group.id, \.challengeUpdatesEnabled))
-                        Picker("Friend activity", selection: groupBinding(group.id, \.friendActivityMode)) {
-                            Text("Immediate").tag(NotificationLevel.immediate)
-                            Text("Daily digest").tag(NotificationLevel.digest)
-                            Text("Off").tag(NotificationLevel.off)
-                        }
-                        .accessibilityIdentifier("notifications.friendActivity.\(group.id.uuidString)")
-                        if reminderIsAfterDeadline(for: group.id) {
-                            Label("Reminder time is after this crew’s daily deadline. You may get nudged after the window closes.", systemImage: "exclamationmark.triangle.fill")
+                            Divider()
+                            Picker("Friend activity", selection: groupBinding(group.id, \.friendActivityMode)) {
+                                Text("Immediate").tag(NotificationLevel.immediate)
+                                Text("Daily digest").tag(NotificationLevel.digest)
+                                Text("Off").tag(NotificationLevel.off)
+                            }
+                            .frame(minHeight: 44)
+                            .accessibilityIdentifier("notifications.friendActivity.\(group.id.uuidString)")
+                            Text("When someone posts a check-in. Separate from votes and round updates.")
                                 .font(.caption)
-                                .foregroundStyle(AppColors.warning)
-                                .accessibilityIdentifier("notifications.deadlineWarning.\(group.id.uuidString)")
+                                .foregroundStyle(AppColors.secondaryInk)
+                            if reminderIsAfterDeadline(for: group.id) {
+                                Divider()
+                                Label("Reminder time is after this crew’s daily deadline. You may get nudged after the window closes.", systemImage: "exclamationmark.triangle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(AppColors.warning)
+                                    .accessibilityIdentifier("notifications.deadlineWarning.\(group.id.uuidString)")
+                            }
                         }
                     }
-                }
-                Section("Quiet hours") {
-                    DatePicker("Starts", selection: minutesBinding(\.quietHoursStart), displayedComponents: .hourAndMinute)
-                    DatePicker("Ends", selection: minutesBinding(\.quietHoursEnd), displayedComponents: .hourAndMinute)
-                    Text("Cahoots never includes detailed workout quantities in lock-screen notifications.").font(.caption).foregroundStyle(AppColors.secondaryInk)
+                    CahootsSettingsSection("Quiet hours") {
+                        DatePicker("Starts", selection: minutesBinding(\.quietHoursStart), displayedComponents: .hourAndMinute)
+                            .frame(minHeight: 44)
+                        Divider()
+                        DatePicker("Ends", selection: minutesBinding(\.quietHoursEnd), displayedComponents: .hourAndMinute)
+                            .frame(minHeight: 44)
+                        Divider()
+                        Text("Cahoots never includes detailed workout quantities in lock-screen notifications.")
+                            .font(.caption)
+                            .foregroundStyle(AppColors.secondaryInk)
+                    }
                 }
             }
+            .padding(AppSpacing.page)
+            .padding(.bottom, 24)
         }
-        .roundFormChrome()
+        .roundPage()
         .navigationTitle("Notifications")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
@@ -319,8 +383,10 @@ struct NotificationSettingsView: View {
         switch store.notificationAuthorizationState {
         case .undetermined:
             Button("Enable notifications") { Task { await store.requestNotifications() } }
+                .buttonStyle(PrimaryButtonStyle())
         case .denied:
             Button("Open iOS Settings") { if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) } }
+                .buttonStyle(SecondaryButtonStyle())
         case .authorized, .provisional:
             Label("Notifications enabled", systemImage: "checkmark.circle.fill").foregroundStyle(AppColors.accent)
         }
@@ -417,17 +483,26 @@ private struct BlockedMembersView: View {
     }
 
     var body: some View {
-        List {
-            ForEach(members) { member in
-                AdaptiveStack(spacing: AppSpacing.medium) {
-                    AvatarView(user: member)
-                    Text(member.displayName).font(.headline)
-                    Spacer(minLength: 0)
-                    Button("Unblock") { Task { await store.unblock(userID: member.id) } }.buttonStyle(.bordered)
+        ScrollView {
+            LazyVStack(spacing: AppSpacing.medium) {
+                ForEach(members) { member in
+                    CahootsCard {
+                        VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                            HStack(spacing: AppSpacing.medium) {
+                                AvatarView(user: member)
+                                Text(member.displayName).font(.headline)
+                                Spacer(minLength: 0)
+                            }
+                            Button("Unblock") { Task { await store.unblock(userID: member.id) } }
+                                .buttonStyle(SecondaryButtonStyle())
+                        }
+                    }
                 }
             }
+            .padding(AppSpacing.page)
+            .padding(.bottom, 24)
         }
-        .roundFormChrome()
+        .roundPage()
         .navigationTitle("Blocked members")
         .overlay {
             if members.isEmpty {
@@ -439,19 +514,36 @@ private struct BlockedMembersView: View {
 
 struct PrivacySummaryView: View {
     var body: some View {
-        List {
-            Section("Private by default") {
-                Label("Invite-only groups", systemImage: "lock.fill")
-                Label("No public discovery", systemImage: "eye.slash.fill")
-                Label("No location sharing", systemImage: "location.slash.fill")
-                Label("Private group workout clips only", systemImage: "video.fill")
+        ScrollView {
+            LazyVStack(spacing: AppSpacing.large) {
+                CahootsSettingsSection("Private by default") {
+                    Label("Invite-only groups", systemImage: "lock.fill")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(minHeight: 44)
+                    Divider()
+                    Label("No public discovery", systemImage: "eye.slash.fill")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(minHeight: 44)
+                    Divider()
+                    Label("No location sharing", systemImage: "location.slash.fill")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(minHeight: 44)
+                    Divider()
+                    Label("Private group workout clips only", systemImage: "video.fill")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(minHeight: 44)
+                }
+                CahootsSettingsSection("Workout privacy") {
+                    Text("Friends see who posted and when. Quantities, points, and clips stay hidden until you check in, use a recovery day, or the daily deadline passes. Clips are kept until about two days after that day’s deadline, until you check in on a newer day, or until the round ends.")
+                }
+                CahootsSettingsSection("Control") {
+                    Text("You can leave groups, mute friend activity, block or report members, and delete your account.")
+                }
             }
-            Section("Workout privacy") {
-                Text("Friends see who posted and when. Quantities, points, and clips stay hidden until you check in, use a recovery day, or the daily deadline passes. Clips are kept for up to seven days or until the round ends.")
-            }
-            Section("Control") { Text("You can leave groups, mute friend activity, block or report members, and delete your account.") }
+            .padding(AppSpacing.page)
+            .padding(.bottom, 24)
         }
-        .roundFormChrome()
+        .roundPage()
         .navigationTitle("Privacy")
     }
 }

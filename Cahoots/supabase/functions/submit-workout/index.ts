@@ -2,6 +2,15 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, json } from "../_shared/cors.ts";
 import { loadApnsConfig, sendApnsAlert } from "../_shared/apns.ts";
 
+/** Coerce ISO timestamps or bare dates to Postgres `date` wire form `yyyy-MM-dd`. */
+function asDateOnly(value: unknown): string | null {
+  if (value == null) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match?.[1] ?? null;
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
@@ -24,10 +33,13 @@ Deno.serve(async (request) => {
       storagePath: clip.remotePath ?? clip.storagePath ?? clip.storage_path ?? clip.localFilename,
     }));
 
+    const requirementDate = asDateOnly(body.requirementDate ?? body.requirement_date);
+    if (!requirementDate) return json({ message: "requirementDate is required" }, 422);
+
     const { data, error } = await client.rpc("accept_submission", {
       client_id: body.clientGeneratedID ?? body.client_generated_id,
       challenge_id_input: body.challengeID ?? body.challenge_id,
-      requirement_date_input: body.requirementDate ?? body.requirement_date,
+      requirement_date_input: requirementDate,
       quantity_input: body.quantity,
       completed_at_input: body.completedAt ?? body.completed_at,
       clips_input: clips,
@@ -40,7 +52,7 @@ Deno.serve(async (request) => {
       await fanOutFriendPosted(admin, {
         actorID: userData.user.id,
         challengeID: body.challengeID ?? body.challenge_id,
-        requirementDate: body.requirementDate ?? body.requirement_date,
+        requirementDate,
       });
     }
 
@@ -92,6 +104,14 @@ async function fanOutFriendPosted(
     .select("user_id, token, environment")
     .in("user_id", memberIDs);
 
+  const { data: profiles } = await admin
+    .from("profiles")
+    .select("id, timezone_identifier")
+    .in("id", memberIDs);
+  const timezoneByUser = new Map<string, string>(
+    (profiles ?? []).map((row) => [row.id as string, (row.timezone_identifier as string) || "UTC"]),
+  );
+
   const prefsByUser = new Map<string, Array<Record<string, unknown>>>();
   for (const pref of preferences ?? []) {
     const list = prefsByUser.get(pref.user_id) ?? [];
@@ -106,12 +126,7 @@ async function fanOutFriendPosted(
     tokensByUser.set(token.user_id, list);
   }
 
-  await admin.from("activity_feed_items").insert({
-    group_id: challenge.group_id,
-    actor_id: input.actorID,
-    event_type: "completion",
-    message: "A member completed today's challenge.",
-  });
+  // Completion activity is written inside accept_submission — do not duplicate here.
 
   const apns = loadApnsConfig();
   const deepLink = `cahoots://log/${challenge.group_id}`;
@@ -120,11 +135,12 @@ async function fanOutFriendPosted(
     const prefs = prefsByUser.get(memberID) ?? [];
     const groupPref = prefs.find((row) => row.group_id === challenge.group_id);
     const globalPref = prefs.find((row) => row.group_id == null);
-    const mode = (groupPref?.friend_activity_mode ?? globalPref?.friend_activity_mode ?? "digest") as string;
+    const mode = (groupPref?.friend_activity_mode ?? globalPref?.friend_activity_mode ?? "immediate") as string;
     if (mode === "off") continue;
 
     const quietStart = Number(groupPref?.quiet_hours_start ?? globalPref?.quiet_hours_start ?? 22 * 60);
     const quietEnd = Number(groupPref?.quiet_hours_end ?? globalPref?.quiet_hours_end ?? 7 * 60);
+    const memberTimezone = timezoneByUser.get(memberID) ?? "UTC";
 
     const viewerHasCompleted = completedIDs.has(memberID);
     const body = viewerHasCompleted
@@ -142,7 +158,7 @@ async function fanOutFriendPosted(
       continue;
     }
 
-    if (isInQuietHours(quietStart, quietEnd)) {
+    if (isInQuietHours(quietStart, quietEnd, memberTimezone)) {
       await admin.from("push_digest_events").insert({
         user_id: memberID,
         group_id: challenge.group_id,
@@ -154,6 +170,18 @@ async function fanOutFriendPosted(
     }
 
     const memberTokens = tokensByUser.get(memberID) ?? [];
+    if (memberTokens.length === 0) {
+      // No device token yet — keep a digest event so evening flush can still remind once they register.
+      await admin.from("push_digest_events").insert({
+        user_id: memberID,
+        group_id: challenge.group_id,
+        actor_id: input.actorID,
+        actor_name: actorName,
+        group_name: groupName,
+      });
+      continue;
+    }
+
     for (const tokenRow of memberTokens) {
       const environment = tokenRow.environment === "production" ? "production" : "sandbox";
       let delivered = false;
@@ -187,9 +215,25 @@ async function fanOutFriendPosted(
   }
 }
 
-function isInQuietHours(startMinutes: number, endMinutes: number): boolean {
-  const now = new Date();
-  const minutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+function localMinutesNow(timeZone: string): number {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hour: "numeric",
+      minute: "numeric",
+      hourCycle: "h23",
+    }).formatToParts(new Date());
+    const hour = Number(parts.find((part) => part.type === "hour")?.value ?? "0");
+    const minute = Number(parts.find((part) => part.type === "minute")?.value ?? "0");
+    return hour * 60 + minute;
+  } catch {
+    const now = new Date();
+    return now.getUTCHours() * 60 + now.getUTCMinutes();
+  }
+}
+
+function isInQuietHours(startMinutes: number, endMinutes: number, timeZone: string): boolean {
+  const minutes = localMinutesNow(timeZone);
   if (startMinutes === endMinutes) return false;
   if (startMinutes < endMinutes) return minutes >= startMinutes && minutes < endMinutes;
   return minutes >= startMinutes || minutes < endMinutes;

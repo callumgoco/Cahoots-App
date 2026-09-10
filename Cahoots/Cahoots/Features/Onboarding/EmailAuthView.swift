@@ -29,10 +29,10 @@ struct EmailAuthView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: AppSpacing.large) {
+                VStack(alignment: .leading, spacing: AppSpacing.extraLarge) {
                     VStack(alignment: .leading, spacing: AppSpacing.small) {
                         Text(title)
-                            .font(.largeTitle.bold())
+                            .font(.system(.largeTitle, design: .rounded, weight: .bold))
                             .fixedSize(horizontal: false, vertical: true)
                         Text(subtitle)
                             .font(.body)
@@ -42,8 +42,12 @@ struct EmailAuthView: View {
 
                     VStack(spacing: AppSpacing.medium) {
                         if mode == .signUp {
-                            authField(title: "Display name") {
-                                TextField("Your name", text: $displayName)
+                            CahootsField(title: "Display name", isFocused: field == .displayName) {
+                                TextField(
+                                    "",
+                                    text: $displayName,
+                                    prompt: Text("Your name").foregroundStyle(AppColors.secondaryInk)
+                                )
                                     .textContentType(.name)
                                     .textInputAutocapitalization(.words)
                                     .submitLabel(.next)
@@ -53,8 +57,13 @@ struct EmailAuthView: View {
                             }
                         }
 
-                        authField(title: "Email") {
-                            TextField("you@example.com", text: $email)
+                        CahootsField(title: "Email", isFocused: field == .email) {
+                            TextField(
+                                "",
+                                text: $email,
+                                prompt: Text(verbatim: "you@example.com")
+                                    .foregroundStyle(AppColors.secondaryInk)
+                            )
                                 .textContentType(.emailAddress)
                                 .keyboardType(.emailAddress)
                                 .textInputAutocapitalization(.never)
@@ -72,13 +81,23 @@ struct EmailAuthView: View {
                         }
 
                         if mode != .resetPassword {
-                            authField(title: "Password") {
+                            CahootsField(title: "Password", isFocused: field == .password) {
                                 HStack(spacing: AppSpacing.small) {
                                     Group {
                                         if showPassword {
-                                            TextField("Password", text: $password)
+                                            TextField(
+                                                "",
+                                                text: $password,
+                                                prompt: Text(verbatim: "Password")
+                                                    .foregroundStyle(AppColors.secondaryInk)
+                                            )
                                         } else {
-                                            SecureField("Password", text: $password)
+                                            SecureField(
+                                                "",
+                                                text: $password,
+                                                prompt: Text(verbatim: "Password")
+                                                    .foregroundStyle(AppColors.secondaryInk)
+                                            )
                                         }
                                     }
                                     .textContentType(mode == .signUp ? .newPassword : .password)
@@ -93,13 +112,33 @@ struct EmailAuthView: View {
                                         showPassword.toggle()
                                     } label: {
                                         Image(systemName: showPassword ? "eye.slash.fill" : "eye.fill")
+                                            .font(.body.weight(.semibold))
                                             .foregroundStyle(AppColors.secondaryInk)
-                                            .frame(minWidth: 44, minHeight: 44)
+                                            .frame(width: 44, height: 44)
+                                            .contentShape(Rectangle())
                                     }
                                     .buttonStyle(.plain)
                                     .accessibilityLabel(showPassword ? "Hide password" : "Show password")
                                 }
                             }
+                        }
+
+                        if mode == .signIn {
+                            Button {
+                                withAnimation(AppMotion.calm) {
+                                    store.errorBanner = nil
+                                    mode = .resetPassword
+                                    field = .email
+                                }
+                            } label: {
+                                Text("Forgot password?")
+                                    .font(.subheadline.weight(.semibold))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .frame(minHeight: 44)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(isWorking)
+                            .accessibilityIdentifier("auth.forgotPassword")
                         }
 
                         if mode == .signUp {
@@ -111,15 +150,20 @@ struct EmailAuthView: View {
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(AppColors.danger)
                                 .fixedSize(horizontal: false, vertical: true)
+                                .padding(AppSpacing.medium)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(AppColors.danger.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
                                 .accessibilityIdentifier("auth.error")
                         }
                     }
                 }
-                .padding(AppSpacing.page)
+                .padding(.horizontal, AppSpacing.page)
+                .padding(.top, AppSpacing.medium)
+                .padding(.bottom, AppSpacing.extraLarge)
             }
             .interactiveKeyboardDismiss()
             .safeAreaInset(edge: .bottom) {
-                VStack(spacing: AppSpacing.medium) {
+                VStack(spacing: 12) {
                     Button {
                         Task { await submit() }
                     } label: {
@@ -134,23 +178,6 @@ struct EmailAuthView: View {
                     .buttonStyle(PrimaryButtonStyle())
                     .disabled(!canSubmit || isWorking)
                     .accessibilityIdentifier(primaryIdentifier)
-
-                    if mode == .signIn {
-                        Button {
-                            withAnimation(AppMotion.calm) {
-                                store.errorBanner = nil
-                                mode = .resetPassword
-                                field = .email
-                            }
-                        } label: {
-                            Text("Forgot password?")
-                                .font(.subheadline.weight(.semibold))
-                                .frame(maxWidth: .infinity, minHeight: 44)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(isWorking)
-                        .accessibilityIdentifier("auth.forgotPassword")
-                    }
 
                     Button {
                         withAnimation(AppMotion.calm) {
@@ -178,8 +205,7 @@ struct EmailAuthView: View {
                     .disabled(isWorking)
                     .accessibilityIdentifier("auth.switchMode")
                 }
-                .padding(AppSpacing.page)
-                .background(.bar)
+                .cahootsSheetFooter()
             }
             .roundPage()
             .navigationTitle(navigationTitle)
@@ -250,19 +276,8 @@ struct EmailAuthView: View {
             Image(systemName: password.count >= 6 ? "checkmark.circle.fill" : "circle")
         }
         .font(.caption.weight(.semibold))
-        .foregroundStyle(password.count >= 6 ? AppColors.accent : AppColors.secondaryInk)
+        .foregroundStyle(password.count >= 6 ? AppColors.ink : AppColors.secondaryInk)
         .accessibilityLabel(password.count >= 6 ? "Password meets the 6 character minimum" : "Password needs at least 6 characters")
-    }
-
-    private func authField<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.micro) {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(AppColors.secondaryInk)
-            content()
-                .padding(AppSpacing.medium)
-                .background(AppColors.card, in: RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous))
-        }
     }
 
     private var canSubmit: Bool {

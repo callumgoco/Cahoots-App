@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import SwiftData
 
 @MainActor
@@ -36,38 +37,71 @@ final class LiveAppRepository: AppRepository {
         try localStore.clearLiveOverlay()
     }
 
-    func syncSubmission(_ submission: Submission) async -> SubmissionSyncResult {
+    func syncSubmission(_ submission: Submission, challengeTimezone: String) async -> SubmissionSyncResult {
+        let clientID = submission.clientGeneratedID.uuidString
+        let dateToken = ScheduleEngine.requirementDateToken(
+            for: submission.requirementDate,
+            timeZoneIdentifier: challengeTimezone
+        ) ?? "unknown"
+        AppLog.sync.info(
+            "syncSubmission start clientID=\(clientID, privacy: .public) challengeID=\(submission.challengeID.uuidString, privacy: .public) clips=\(submission.clips.count, privacy: .public) requirementDate=\(dateToken, privacy: .public) tz=\(challengeTimezone, privacy: .public)"
+        )
+        var uploadedClips: [WorkoutClip] = []
         do {
             var payload = submission
-            var uploadedClips: [WorkoutClip] = []
             for clip in submission.clips {
                 var copy = clip
                 if copy.remotePath == nil, let filename = copy.localFilename {
-                    let ticket = try await requestClipUploadURL(
-                        groupID: UUID(), // server derives group from challenge
-                        challengeID: submission.challengeID,
-                        requirementDate: submission.requirementDate,
-                        clipID: clip.id
+                    AppLog.sync.info(
+                        "clip upload start clipID=\(clip.id.uuidString, privacy: .public) clientID=\(clientID, privacy: .public)"
                     )
-                    try await uploadClip(ticket: ticket, fileURL: WorkoutClipStore.fileURL(for: filename))
-                    copy.remotePath = ticket.storagePath
+                    do {
+                        let ticket = try await requestClipUploadURL(
+                            groupID: UUID(), // server derives group from challenge
+                            challengeID: submission.challengeID,
+                            requirementDateToken: dateToken,
+                            clipID: clip.id
+                        )
+                        try await uploadClip(ticket: ticket, fileURL: WorkoutClipStore.fileURL(for: filename))
+                        copy.remotePath = ticket.storagePath
+                        AppLog.sync.info(
+                            "clip upload success clipID=\(clip.id.uuidString, privacy: .public) path=\(ticket.storagePath, privacy: .public)"
+                        )
+                    } catch {
+                        AppLog.sync.error(
+                            "clip upload failed clipID=\(clip.id.uuidString, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                        )
+                        throw error
+                    }
                 }
                 uploadedClips.append(copy)
             }
             payload.clips = uploadedClips
-            let body = try encoder.encode(payload)
+            let body = try encodeSubmitWorkoutBody(payload, requirementDateToken: dateToken)
+            AppLog.sync.info("submit-workout POST start clientID=\(clientID, privacy: .public) requirementDate=\(dateToken, privacy: .public)")
             _ = try await client.request(path: "/functions/v1/submit-workout", method: "POST", body: body)
-            return .accepted(.init(submissionID: submission.id, acceptedAt: .now))
+            AppLog.sync.info("submit-workout accepted clientID=\(clientID, privacy: .public)")
+            return .accepted(.init(submissionID: submission.id, acceptedAt: .now), uploadedClips: uploadedClips)
         } catch RepositoryError.authenticationRequired {
-            return .authenticationRequired
+            AppLog.sync.error("syncSubmission auth required clientID=\(clientID, privacy: .public)")
+            return .authenticationRequired(uploadedClips: uploadedClips)
         } catch let error as RepositoryError {
             if case .server(let message) = error,
                message.lowercased().contains("reject") || message.lowercased().contains("invalid_submission") {
+                AppLog.sync.error(
+                    "syncSubmission rejected clientID=\(clientID, privacy: .public) message=\(message, privacy: .public)"
+                )
                 return .rejected(message)
             }
-            return .retryable(error.localizedDescription, retryAfter: nil)
+            AppLog.sync.error(
+                "syncSubmission retryable clientID=\(clientID, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+            )
+            return .retryable(error.localizedDescription, retryAfter: nil, uploadedClips: uploadedClips)
         } catch {
-            return .retryable(error.localizedDescription, retryAfter: nil)
+            AppLog.sync.error(
+                "syncSubmission retryable clientID=\(clientID, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+            )
+            return .retryable(error.localizedDescription, retryAfter: nil, uploadedClips: uploadedClips)
         }
     }
 
@@ -162,6 +196,11 @@ final class LiveAppRepository: AppRepository {
                 "group_id_input": groupID.uuidString
             ])
 
+        case .deleteGroup(let groupID):
+            try await client.rpcVoid("delete_group", parameters: [
+                "group_id_input": groupID.uuidString
+            ])
+
         case .revokeInvites(let groupID):
             try await client.rpcVoid("revoke_group_invites", parameters: [
                 "group_id_input": groupID.uuidString
@@ -197,16 +236,11 @@ final class LiveAppRepository: AppRepository {
         return try await load()
     }
 
-    func requestClipUploadURL(groupID: UUID, challengeID: UUID, requirementDate: Date, clipID: UUID) async throws -> ClipUploadTicket {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd"
+    func requestClipUploadURL(groupID: UUID, challengeID: UUID, requirementDateToken: String, clipID: UUID) async throws -> ClipUploadTicket {
         let body = try JSONSerialization.data(withJSONObject: [
-            "challengeID": challengeID.uuidString,
-            "requirementDate": formatter.string(from: requirementDate),
-            "clipID": clipID.uuidString
+            "challengeID": challengeID.uuidString.lowercased(),
+            "requirementDate": requirementDateToken,
+            "clipID": clipID.uuidString.lowercased()
         ])
         let data = try await client.request(path: "/functions/v1/clip-upload-url", method: "POST", body: body)
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -246,6 +280,44 @@ final class LiveAppRepository: AppRepository {
             clipID: clipID,
             expiresIn: expiresIn
         )
+    }
+
+    private func encodeSubmitWorkoutBody(_ submission: Submission, requirementDateToken: String) throws -> Data {
+        struct Body: Encodable {
+            var id: UUID
+            var clientGeneratedID: UUID
+            var challengeID: UUID
+            var userID: UUID
+            var requirementDate: String
+            var quantity: Double
+            var measurementType: MeasurementType
+            var completedAt: Date
+            var submittedAt: Date
+            var syncState: SyncState
+            var verificationState: VerificationState
+            var createdAt: Date
+            var updatedAt: Date
+            var rejectionReason: String?
+            var clips: [WorkoutClip]
+        }
+        let body = Body(
+            id: submission.id,
+            clientGeneratedID: submission.clientGeneratedID,
+            challengeID: submission.challengeID,
+            userID: submission.userID,
+            requirementDate: requirementDateToken,
+            quantity: submission.quantity,
+            measurementType: submission.measurementType,
+            completedAt: submission.completedAt,
+            submittedAt: submission.submittedAt,
+            syncState: submission.syncState,
+            verificationState: submission.verificationState,
+            createdAt: submission.createdAt,
+            updatedAt: submission.updatedAt,
+            rejectionReason: submission.rejectionReason,
+            clips: submission.clips
+        )
+        return try encoder.encode(body)
     }
 
     private func proposalParams(groupID: UUID, draft: ProposalDraft, startKey: String) -> [String: Any] {

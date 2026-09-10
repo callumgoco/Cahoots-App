@@ -15,5 +15,11 @@ verify_jwt = true
 [functions.delete-account]
 verify_jwt = true
 
+[functions.clip-download-url]
+verify_jwt = true
+
 [functions.purge-workout-clips]
+verify_jwt = false
+
+[functions.dispatch-pushes]
 verify_jwt = false

@@ -10,11 +10,11 @@ struct ChallengeBuilderView: View {
     @State private var customName = ""
     @State private var isSubmitting = false
     @State private var showCloseConfirmation = false
-    @State private var showCustomize = false
     @State private var didLoad = false
     private let initialDraft: ProposalDraft?
     private let draftStore = ProposalDraftStore()
-    private let stepTitles = ["Goal", "When", "Review"]
+    private let stepTitles = ["Workout", "Target", "When", "Review"]
+    private let totalSteps = 4
 
     init(initialDraft: ProposalDraft? = nil) {
         self.initialDraft = initialDraft
@@ -26,26 +26,27 @@ struct ChallengeBuilderView: View {
             VStack(spacing: 0) {
                 VStack(alignment: .leading, spacing: AppSpacing.small) {
                     AdaptiveStack(spacing: AppSpacing.small) {
-                        Text("Step \(step + 1) of 3").font(.caption.weight(.semibold)).foregroundStyle(AppColors.secondaryInk)
+                        Text("Step \(step + 1) of \(totalSteps)").font(.caption.weight(.semibold)).foregroundStyle(AppColors.secondaryInk)
                         Spacer(minLength: 0)
                         Text(stepTitles[step]).font(.caption.bold())
                     }
-                    ProgressView(value: Double(step + 1), total: 3).tint(AppColors.accent)
+                    ProgressView(value: Double(step + 1), total: Double(totalSteps)).tint(AppColors.accent)
                 }
                 .padding(.horizontal, AppSpacing.page)
                 .padding(.vertical, AppSpacing.small)
 
                 Group {
                     switch step {
-                    case 0: goalStep
-                    case 1: whenStep
+                    case 0: workoutStep
+                    case 1: targetStep
+                    case 2: whenStep
                     default: reviewStep
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 VStack(spacing: AppSpacing.small) {
-                    if step < 2 {
+                    if step < totalSteps - 1 {
                         AdaptiveStack(spacing: AppSpacing.small) {
                             if step > 0 { Button("Back") { step -= 1 }.buttonStyle(SecondaryButtonStyle()) }
                             Button("Continue") { step += 1 }
@@ -79,8 +80,16 @@ struct ChallengeBuilderView: View {
                             }
                         }
                         .buttonStyle(SecondaryButtonStyle())
-                        .disabled(!isStepValid || isSubmitting)
+                        .disabled(!isStepValid || isSubmitting || !canPutToVote)
                         .accessibilityIdentifier("builder.submit")
+                        if !canPutToVote {
+                            Text(VotingWindowCopy.soloVoteDisabledHint)
+                                .font(.footnote)
+                                .foregroundStyle(AppColors.secondaryInk)
+                                .multilineTextAlignment(.center)
+                                .frame(maxWidth: .infinity)
+                                .accessibilityIdentifier("builder.soloVoteHint")
+                        }
                         if step > 0 {
                             Button("Back") { step -= 1 }
                                 .font(.subheadline.weight(.semibold))
@@ -89,8 +98,7 @@ struct ChallengeBuilderView: View {
                         }
                     }
                 }
-                .padding(AppSpacing.page)
-                .background(.bar)
+                .cahootsSheetFooter()
             }
             .navigationTitle("New round")
             .navigationBarTitleDisplayMode(.inline)
@@ -112,18 +120,14 @@ struct ChallengeBuilderView: View {
         }
     }
 
-    private var goalStep: some View {
+    private var workoutStep: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppSpacing.large) {
-                Text("Choose a clear goal").font(.largeTitle.bold())
+                Text("Choose a workout").font(.largeTitle.bold())
                 LazyVStack(spacing: AppSpacing.small) {
                     ForEach(ActivityTemplate.all) { template in
                         Button {
-                            selectedTemplateID = template.id
-                            draft.activityName = template.activityName
-                            draft.measurementType = template.measurementType
-                            draft.minimumQuantity = template.suggestedTarget
-                            if template.id != "custom" { draft.title = generatedTitle(template.displayName) }
+                            applyTemplate(template)
                         } label: {
                             AdaptiveStack(spacing: AppSpacing.medium) {
                                 Image(systemName: template.symbol).font(.title2).frame(minWidth: 44, minHeight: 44)
@@ -136,7 +140,9 @@ struct ChallengeBuilderView: View {
                                     .foregroundStyle(selectedTemplateID == template.id ? AppColors.accent : AppColors.secondaryInk)
                             }
                             .padding(AppSpacing.medium)
+                            .environment(\.colorScheme, .dark)
                             .background(AppColors.raised, in: RoundedRectangle(cornerRadius: AppRadius.control))
+                            .foregroundStyle(AppColors.ink)
                         }
                         .buttonStyle(.plain)
                     }
@@ -152,6 +158,16 @@ struct ChallengeBuilderView: View {
                         }
                     }
                 }
+            }
+            .padding(AppSpacing.page)
+        }
+        .interactiveKeyboardDismiss()
+    }
+
+    private var targetStep: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: AppSpacing.large) {
+                Text(targetStepHeadline).font(.largeTitle.bold())
                 CahootsCard {
                     VStack(alignment: .leading, spacing: AppSpacing.medium) {
                         Text("Daily target").font(.headline)
@@ -202,20 +218,12 @@ struct ChallengeBuilderView: View {
                 }
                 CahootsCard {
                     VStack(alignment: .leading, spacing: AppSpacing.medium) {
-                        Label("Defaults: closes \(deadlineText), \(draft.timezone.replacingOccurrences(of: "_", with: " ")), \(draft.recoveryDays) recovery day\(draft.recoveryDays == 1 ? "" : "s").", systemImage: "checkmark.circle.fill")
-                            .font(.subheadline)
-                            .foregroundStyle(AppColors.secondaryInk)
-                        Button(showCustomize ? "Hide customize" : "Customize") {
-                            showCustomize.toggle()
+                        Text("Check-in rules").font(.headline)
+                        DatePicker("Daily deadline", selection: deadlineBinding, displayedComponents: .hourAndMinute)
+                        Picker("Timezone", selection: $draft.timezone) {
+                            ForEach(timezoneOptions, id: \.self) { Text($0.replacingOccurrences(of: "_", with: " ")).tag($0) }
                         }
-                        .font(.subheadline.weight(.semibold))
-                        if showCustomize {
-                            DatePicker("Daily deadline", selection: deadlineBinding, displayedComponents: .hourAndMinute)
-                            Picker("Timezone", selection: $draft.timezone) {
-                                ForEach(timezoneOptions, id: \.self) { Text($0.replacingOccurrences(of: "_", with: " ")).tag($0) }
-                            }
-                            Stepper("\(draft.recoveryDays) recovery \(draft.recoveryDays == 1 ? "day" : "days")", value: $draft.recoveryDays, in: 0...4)
-                        }
+                        Stepper("\(draft.recoveryDays) recovery \(draft.recoveryDays == 1 ? "day" : "days")", value: $draft.recoveryDays, in: 0...4)
                     }
                 }
                 Text("Members record their own check-ins. Recovery protects a streak and awards no points.")
@@ -233,7 +241,10 @@ struct ChallengeBuilderView: View {
                 Text("Ready to go").font(.largeTitle.bold())
                 CahootsCard(elevated: true) {
                     VStack(alignment: .leading, spacing: AppSpacing.medium) {
-                        StatusPill(text: "Start now or put to vote", kind: .positive)
+                        StatusPill(
+                            text: canPutToVote ? "Start now or put to vote" : "Start now",
+                            kind: .positive
+                        )
                         Text(draft.title).font(.title.bold())
                         AdaptiveStack(spacing: AppSpacing.small) {
                             Text(draft.minimumQuantity.formatted()).font(AppTypography.heroMetric)
@@ -242,11 +253,20 @@ struct ChallengeBuilderView: View {
                         Divider()
                         Label(scheduleSummary, systemImage: "calendar")
                         Label("\(draft.durationDays) days from \(draft.startDate.formatted(date: .abbreviated, time: .omitted))", systemImage: "flag.checkered")
-                        Label("Closes \(deadlineText) · \(draft.timezone)", systemImage: "clock")
+                        Label("Daily check-in closes \(deadlineText) · \(draft.timezone)", systemImage: "clock")
+                        if canPutToVote {
+                            Label(
+                                VotingWindowCopy.statusLine(endsAt: VotingWindowCopy.estimatedCloseDate()),
+                                systemImage: "checkmark.seal"
+                            )
+                        }
                         Label("\(draft.recoveryDays) recovery \(draft.recoveryDays == 1 ? "day" : "days")", systemImage: "moon.zzz")
                     }
                 }
-                Text("Start now schedules the round immediately. Put to vote opens a 48-hour group vote that needs a strict majority.")
+                Text(VotingWindowCopy.reviewFootnote(
+                    canPutToVote: canPutToVote,
+                    closesAt: VotingWindowCopy.estimatedCloseDate()
+                ))
                     .font(.footnote)
                     .foregroundStyle(AppColors.secondaryInk)
             }
@@ -254,13 +274,17 @@ struct ChallengeBuilderView: View {
         }
     }
 
+    private var canPutToVote: Bool {
+        store.groupMembers.count >= 2
+    }
+
     private var isStepValid: Bool {
         switch step {
         case 0:
-            draft.minimumQuantity > 0
-                && TextSanitizer.clean(draft.title).count >= 2
-                && (selectedTemplateID != "custom" || TextSanitizer.clean(customName).count >= 2)
+            selectedTemplateID != "custom" || TextSanitizer.clean(customName).count >= 2
         case 1:
+            draft.minimumQuantity > 0 && TextSanitizer.clean(draft.title).count >= 2
+        case 2:
             !draft.scheduledWeekdays.isEmpty
                 && (7...90).contains(draft.durationDays)
                 && draft.startDate >= store.earliestProposalStartDate
@@ -269,6 +293,14 @@ struct ChallengeBuilderView: View {
                 && (0...4).contains(draft.recoveryDays)
         default:
             true
+        }
+    }
+
+    private var targetStepHeadline: String {
+        switch draft.measurementType {
+        case .repetitions: String(localized: "How many reps?")
+        case .seconds, .minutes: String(localized: "How long?")
+        case .distance: String(localized: "How far?")
         }
     }
 
@@ -312,6 +344,14 @@ struct ChallengeBuilderView: View {
         "\(draft.durationDays)-Day \(activity.replacingOccurrences(of: " · time", with: "").replacingOccurrences(of: " · distance", with: "")) Challenge"
     }
 
+    private func applyTemplate(_ template: ActivityTemplate) {
+        selectedTemplateID = template.id
+        draft.activityName = template.activityName
+        draft.measurementType = template.measurementType
+        draft.minimumQuantity = template.suggestedTarget
+        if template.id != "custom" { draft.title = generatedTitle(template.displayName) }
+    }
+
     private func loadDraft() {
         guard !didLoad else { return }
         if initialDraft == nil,
@@ -321,6 +361,12 @@ struct ChallengeBuilderView: View {
             draft = saved
         }
         draft.startDate = max(draft.startDate, store.earliestProposalStartDate)
+        if let match = ActivityTemplate.all.first(where: { $0.activityName == draft.activityName }) {
+            selectedTemplateID = match.id
+        } else if draft.activityName != "push-ups" {
+            selectedTemplateID = "custom"
+            customName = draft.activityName
+        }
         didLoad = true
         saveDraft()
     }

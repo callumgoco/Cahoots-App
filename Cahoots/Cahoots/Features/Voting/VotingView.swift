@@ -4,6 +4,7 @@ struct VotingView: View {
     @Environment(AppStore.self) private var store
     let proposalID: UUID
     @State private var showDuplicate = false
+    @State private var showFreshBuilder = false
     @State private var showMemberStatus = false
     @State private var isVoting = false
 
@@ -34,8 +35,7 @@ struct VotingView: View {
                proposal.status == .voting,
                proposal.eligibleVoterIDs.contains(store.currentUser?.id ?? UUID()) {
                 voteActions
-                    .padding(AppSpacing.page)
-                    .background(.bar)
+                    .cahootsSheetFooter()
             }
         }
         .task { await store.handleBecameActive() }
@@ -43,6 +43,9 @@ struct VotingView: View {
             if let proposal {
                 ChallengeBuilderView(initialDraft: ProposalDraft(proposal: proposal, earliestStartDate: store.earliestProposalStartDate))
             }
+        }
+        .sheet(isPresented: $showFreshBuilder) {
+            ChallengeBuilderView()
         }
     }
 
@@ -52,7 +55,10 @@ struct VotingView: View {
                 AdaptiveStack(spacing: AppSpacing.small) {
                     StatusPill(text: proposal.status == .voting ? "Voting open" : proposal.status.rawValue.capitalized, kind: statusKind(proposal))
                     Spacer(minLength: 0)
-                    Text(timeRemaining(proposal)).font(.caption.bold()).foregroundStyle(AppColors.secondaryInk)
+                    Text(VotingWindowCopy.statusLine(endsAt: proposal.votingEndsAt))
+                        .font(.caption.bold())
+                        .foregroundStyle(AppColors.secondaryInk)
+                        .multilineTextAlignment(.trailing)
                 }
                 Text(proposal.title).font(.largeTitle.bold())
                 AdaptiveStack(spacing: AppSpacing.small) {
@@ -77,6 +83,13 @@ struct VotingView: View {
     private func voteProgress(_ proposal: ChallengeProposal) -> some View {
         let accepts = votes.filter { $0.choice == .accept }.count
         let needed = max(2, proposal.eligibleVoterIDs.count / 2 + 1)
+        let eligible = store.groupMembers.filter { proposal.eligibleVoterIDs.contains($0.id) }
+        let votedIDs = Set(votes.map(\.userID))
+        let outstandingSummary = CrewAccountabilityCopy.voteSummary(
+            eligible: eligible,
+            votedUserIDs: votedIDs,
+            currentUserID: store.currentUser?.id ?? UUID()
+        )
         return CahootsCard {
             VStack(alignment: .leading, spacing: AppSpacing.medium) {
                 AdaptiveStack(spacing: AppSpacing.small) {
@@ -85,35 +98,74 @@ struct VotingView: View {
                     Spacer()
                     Text("\(votes.count) of \(proposal.eligibleVoterIDs.count) voted").font(.caption.bold()).foregroundStyle(AppColors.secondaryInk)
                 }
-                ProgressView(value: Double(votes.count), total: Double(proposal.eligibleVoterIDs.count)).tint(AppColors.accent)
+                ProgressView(value: Double(votes.count), total: Double(max(1, proposal.eligibleVoterIDs.count))).tint(AppColors.accent)
+                if let outstandingSummary {
+                    Text(outstandingSummary)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AppColors.ink)
+                        .accessibilityIdentifier("vote.outstandingSummary")
+                }
                 Text("A tie fails. Voting also closes early after every eligible member votes.").font(.caption).foregroundStyle(AppColors.secondaryInk)
             }
         }
     }
 
     private func memberStatus(_ proposal: ChallengeProposal) -> some View {
-        CahootsCard {
-            DisclosureGroup("Member status", isExpanded: $showMemberStatus) {
-                VStack(alignment: .leading, spacing: AppSpacing.medium) {
-                    ForEach(store.groupMembers.filter { proposal.eligibleVoterIDs.contains($0.id) }) { member in
-                        AdaptiveStack(spacing: AppSpacing.small) {
-                            AvatarView(user: member, size: 36)
-                            Text(member.displayName).font(.subheadline.weight(.semibold))
-                            Spacer(minLength: 0)
-                            if myVote != nil, let vote = votes.first(where: { $0.userID == member.id }) {
-                                Label(vote.choice == .accept ? "Accept" : "Reject", systemImage: vote.choice == .accept ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                    .font(.caption.weight(.semibold)).foregroundStyle(vote.choice == .accept ? AppColors.accent : AppColors.secondaryInk)
-                            } else if myVote != nil {
-                                Text("Awaiting").font(.caption).foregroundStyle(AppColors.secondaryInk)
-                            } else {
-                                Text("Vote hidden").font(.caption).foregroundStyle(AppColors.secondaryInk)
+        let eligible = store.groupMembers.filter { proposal.eligibleVoterIDs.contains($0.id) }
+        let votedIDs = Set(votes.map(\.userID))
+        return CahootsCard {
+            VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                if proposal.status == .voting, myVote == nil {
+                    let awaiting = eligible.filter { !votedIDs.contains($0.id) }
+                    if !awaiting.isEmpty {
+                        Text("Still need to vote")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(AppColors.secondaryInk)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: AppSpacing.medium) {
+                                ForEach(awaiting) { member in
+                                    VStack(spacing: 6) {
+                                        AvatarView(user: member, size: 40)
+                                        Text(member.id == store.currentUser?.id
+                                             ? String(localized: "You")
+                                             : (member.displayName.split(separator: " ").first.map(String.init) ?? member.displayName))
+                                            .font(.caption2.bold())
+                                            .lineLimit(1)
+                                    }
+                                    .frame(width: 56)
+                                }
+                            }
+                        }
+                        .accessibilityIdentifier("vote.awaitingStrip")
+                        Text("Choices stay hidden until you vote.")
+                            .font(.caption)
+                            .foregroundStyle(AppColors.secondaryInk)
+                    }
+                }
+                DisclosureGroup("Member status", isExpanded: $showMemberStatus) {
+                    VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                        ForEach(eligible) { member in
+                            AdaptiveStack(spacing: AppSpacing.small) {
+                                AvatarView(user: member, size: 36)
+                                Text(member.displayName).font(.subheadline.weight(.semibold))
+                                Spacer(minLength: 0)
+                                if myVote != nil, let vote = votes.first(where: { $0.userID == member.id }) {
+                                    Label(vote.choice == .accept ? "Accept" : "Reject", systemImage: vote.choice == .accept ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                        .font(.caption.weight(.semibold)).foregroundStyle(vote.choice == .accept ? AppColors.accent : AppColors.secondaryInk)
+                                } else if myVote != nil {
+                                    Text("Awaiting").font(.caption).foregroundStyle(AppColors.secondaryInk)
+                                } else if votedIDs.contains(member.id) {
+                                    Text("Voted").font(.caption).foregroundStyle(AppColors.secondaryInk)
+                                } else {
+                                    Text("Awaiting").font(.caption).foregroundStyle(AppColors.secondaryInk)
+                                }
                             }
                         }
                     }
+                    .padding(.top, AppSpacing.medium)
                 }
-                .padding(.top, AppSpacing.medium)
+                .font(.headline)
             }
-            .font(.headline)
         }
     }
 
@@ -163,12 +215,22 @@ struct VotingView: View {
         VStack(spacing: AppSpacing.medium) {
             Image(systemName: proposal.status == .passed ? "checkmark.seal.fill" : "arrow.uturn.backward.circle.fill")
                 .font(.system(size: 54)).foregroundStyle(proposal.status == .passed ? AppColors.accent : AppColors.secondaryInk)
-            Text(proposal.status == .passed ? "Challenge scheduled" : "Proposal did not pass").font(.title.bold())
-            Text(proposal.status == .passed ? "The group agreed. The round will start on the proposed date." : "The proposal can be duplicated and edited for another vote.")
+            Text(proposal.status == .passed ? "Challenge scheduled" : CrewEdgeCopy.failedVoteHeadline).font(.title.bold())
+            Text(proposal.status == .passed
+                 ? "The group agreed. The round will start on the proposed date."
+                 : CrewEdgeCopy.failedVoteBody)
                 .foregroundStyle(AppColors.secondaryInk).multilineTextAlignment(.center)
             if proposal.status == .failed {
                 Button("Duplicate and edit", systemImage: "doc.on.doc") { showDuplicate = true }
                     .buttonStyle(PrimaryButtonStyle())
+                    .accessibilityIdentifier("vote.duplicate")
+                Button("Start a new round") { showFreshBuilder = true }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .accessibilityIdentifier("vote.startFresh")
+                Button("Invite friends") { store.presentInviteFlow(groupID: proposal.groupID) }
+                    .font(.subheadline.weight(.semibold))
+                    .frame(minHeight: 44)
+                    .accessibilityIdentifier("vote.inviteAfterFail")
             }
         }
         .padding(AppSpacing.large)
@@ -183,11 +245,6 @@ struct VotingView: View {
         }
     }
 
-    private func timeRemaining(_ proposal: ChallengeProposal) -> String {
-        if proposal.votingEndsAt <= .now { return String(localized: "Voting closed") }
-        let relative = proposal.votingEndsAt.formatted(.relative(presentation: .numeric, unitsStyle: .abbreviated))
-        return String(localized: "Voting ends \(relative)")
-    }
     private func deadlineText(_ proposal: ChallengeProposal) -> String {
         var components = DateComponents(); components.hour = proposal.dailyDeadlineMinutes / 60; components.minute = proposal.dailyDeadlineMinutes % 60
         return Calendar.current.date(from: components)?.formatted(date: .omitted, time: .shortened) ?? String(localized: "Daily deadline")

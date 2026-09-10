@@ -54,11 +54,17 @@ final class Session2SamStewardUITests: XCTestCase {
             walk.buttons["today.logWorkout"].tap()
             shot(walk, "07-walk-prep")
             if walk.buttons["workoutSession.skipCountdown"].waitForExistence(timeout: 3) {
+                waitUntilEnabled(walk.buttons["workoutSession.skipCountdown"], timeout: 3)
                 walk.buttons["workoutSession.skipCountdown"].tap()
             }
             shot(walk, "08-walk-record-start")
             if walk.buttons["workoutSession.stop"].waitForExistence(timeout: 4) {
                 walk.buttons["workoutSession.stop"].tap()
+            } else if walk.buttons["workoutSession.record"].waitForExistence(timeout: 1) {
+                walk.buttons["workoutSession.record"].tap()
+                if walk.buttons["workoutSession.stop"].waitForExistence(timeout: 4) {
+                    walk.buttons["workoutSession.stop"].tap()
+                }
             }
             shot(walk, "09-walk-review-start")
             if walk.buttons["workoutSession.useClip"].waitForExistence(timeout: 3) {
@@ -96,10 +102,16 @@ final class Session2SamStewardUITests: XCTestCase {
                 walk.buttons["workoutSession.start"].tap()
             }
             if walk.buttons["workoutSession.skipCountdown"].waitForExistence(timeout: 2) {
+                waitUntilEnabled(walk.buttons["workoutSession.skipCountdown"], timeout: 3)
                 walk.buttons["workoutSession.skipCountdown"].tap()
             }
             if walk.buttons["workoutSession.stop"].waitForExistence(timeout: 4) {
                 walk.buttons["workoutSession.stop"].tap()
+            } else if walk.buttons["workoutSession.record"].waitForExistence(timeout: 1) {
+                walk.buttons["workoutSession.record"].tap()
+                if walk.buttons["workoutSession.stop"].waitForExistence(timeout: 4) {
+                    walk.buttons["workoutSession.stop"].tap()
+                }
             }
             shot(walk, "12-finish-review")
             if walk.buttons["workoutSession.useClip"].waitForExistence(timeout: 3) {
@@ -166,16 +178,18 @@ final class Session2SamStewardUITests: XCTestCase {
         shot(app, "P01-crew-propose")
         XCTAssertTrue(app.buttons["group.propose"].waitForExistence(timeout: 3), "Propose should be visible")
         app.buttons["group.propose"].tap()
-        shot(app, "P02-builder-goal")
+        shot(app, "P02-builder-workout")
         if app.buttons["builder.continue"].waitForExistence(timeout: 2) {
             app.buttons["builder.continue"].tap()
-            shot(app, "P03-builder-when")
+            shot(app, "P03-builder-target")
             app.buttons["builder.continue"].tap()
-            shot(app, "P04-builder-review")
+            shot(app, "P04-builder-when")
+            app.buttons["builder.continue"].tap()
+            shot(app, "P05-builder-review")
         }
         if app.buttons["builder.startNow"].waitForExistence(timeout: 3) {
             // Don't start — Sam reviews Put to vote vs Start now
-            shot(app, "P05-builder-actions")
+            shot(app, "P06-builder-actions")
             let putToVote = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "vote")).firstMatch
             if putToVote.exists { /* note for canvas */ }
         }
@@ -185,7 +199,7 @@ final class Session2SamStewardUITests: XCTestCase {
         } else {
             app.swipeDown(velocity: .fast)
         }
-        shot(app, "P06-after-builder")
+        shot(app, "P07-after-builder")
     }
 
     @MainActor
@@ -197,6 +211,14 @@ final class Session2SamStewardUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["group.switcher"].waitForExistence(timeout: 6))
         return app
+    }
+
+    @MainActor
+    private func waitUntilEnabled(_ element: XCUIElement, timeout: TimeInterval) {
+        let predicate = NSPredicate(format: "isEnabled == true")
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
+        let result = XCTWaiter.wait(for: [expectation], timeout: timeout)
+        XCTAssertEqual(result, .completed, "Expected \(element) to become enabled")
     }
 
     @MainActor

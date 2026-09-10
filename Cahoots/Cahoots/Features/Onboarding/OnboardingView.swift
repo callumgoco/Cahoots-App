@@ -5,123 +5,160 @@ struct OnboardingView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var authMode: EmailAuthView.Mode?
+    @State private var selectedFeature = 0
+    @State private var appeared = false
+    @State private var showSplash = Self.shouldPlaySplash
 
-    private let proofPoints: [(symbol: String, text: String)] = [
-        ("person.3.fill", "Create a private group and invite people you know"),
-        ("checkmark.circle.fill", "Agree on one clear daily check-in"),
-        ("equal.circle.fill", "Earn points for showing up, not for grinding")
-    ]
+    private static var shouldPlaySplash: Bool {
+        guard !AppDefaults.isRunningUITests else { return false }
+        return !UserDefaults.standard.bool(forKey: AppDefaults.splashPlayed)
+    }
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: AppSpacing.extraLarge) {
-                    Text(AppIdentity.name)
-                        .font(.title3.bold())
-                        .accessibilityAddTraits(.isHeader)
+        ZStack {
+            onboardingContent
+                .opacity(showSplash ? 0 : 1)
+                .allowsHitTesting(!showSplash)
 
-                    if !dynamicTypeSize.isAccessibilitySize {
-                        welcomeHero
+            if showSplash {
+                LaunchSplashView {
+                    UserDefaults.standard.set(true, forKey: AppDefaults.splashPlayed)
+                    withAnimation(reduceMotion ? nil : AppMotion.calm) {
+                        showSplash = false
                     }
-
-                    VStack(alignment: .leading, spacing: AppSpacing.medium) {
-                        Text("Set one goal with friends")
-                            .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text("Create a private group, pick a daily check-in, and keep each other honest.")
-                            .font(.title3)
-                            .foregroundStyle(AppColors.secondaryInk)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        if let code = store.pendingJoinCode {
-                            Label("Sign in to review invitation \(code)", systemImage: "envelope.open.fill")
-                                .font(.body.weight(.semibold))
-                        }
-                        if store.mode == .demo {
-                            DemoModeBadge()
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: AppSpacing.medium) {
-                        ForEach(proofPoints, id: \.symbol) { point in
-                            Label(point.text, systemImage: point.symbol)
-                                .font(.body.weight(.medium))
-                                .foregroundStyle(AppColors.ink)
-                                .labelStyle(.titleAndIcon)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
+                    revealOnboarding()
                 }
-                .padding(.horizontal, AppSpacing.page)
-                .padding(.top, AppSpacing.medium)
-                .padding(.bottom, AppSpacing.large)
+                .transition(.opacity)
+                .zIndex(1)
             }
-            .interactiveKeyboardDismiss()
-
-            VStack(spacing: AppSpacing.medium) {
-                if store.mode == .demo {
-                    Button("Explore the demo") { Task { await store.startDemo() } }
-                        .buttonStyle(PrimaryButtonStyle())
-                        .accessibilityIdentifier("onboarding.demo")
-                    Text("No account or external services required")
-                        .font(.caption)
-                        .foregroundStyle(AppColors.secondaryInk)
-                        .multilineTextAlignment(.center)
-                }
-
-                SignInWithAppleButton(.signUp) { request in
-                    request.requestedScopes = [.fullName, .email]
-                    request.nonce = store.beginAppleSignIn()
-                } onCompletion: { result in
-                    Task { await store.handleAppleAuthorization(result) }
-                }
-                .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
-                .frame(height: 54)
-                .clipShape(Capsule())
-                .accessibilityIdentifier("onboarding.apple")
-
-                if store.mode == .live {
-                    Button("Create account with email") { authMode = .signUp }
-                        .buttonStyle(SecondaryButtonStyle())
-                        .accessibilityIdentifier("onboarding.signUp")
-
-                    Button {
-                        authMode = .signIn
-                    } label: {
-                        Text("Already have an account? Sign in")
-                            .font(.subheadline.weight(.semibold))
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("onboarding.signIn")
-                }
-            }
-            .padding(AppSpacing.page)
         }
         .roundPage()
         .sheet(item: $authMode) { mode in
             EmailAuthView(mode: mode)
         }
+        .onAppear {
+            if !showSplash { revealOnboarding() }
+        }
     }
 
-    private var welcomeHero: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 34, style: .continuous)
-                .fill(AppColors.accentSoft)
-                .frame(height: 200)
-            Circle()
-                .fill(AppColors.accent.opacity(0.18))
-                .frame(width: 160, height: 160)
-                .offset(x: -48, y: -36)
-            Image(systemName: "person.3.sequence.fill")
-                .font(.system(size: 64, weight: .bold))
-                .foregroundStyle(AppColors.accent)
-                .symbolRenderingMode(.hierarchical)
+    private var onboardingContent: some View {
+        GeometryReader { proxy in
+            let cardHeight = preferredCardHeight(for: proxy.size.height)
+            ViewThatFits(in: .vertical) {
+                fullLayout(flexibleSpace: true, cardHeight: cardHeight)
+                ScrollView(showsIndicators: false) {
+                    fullLayout(flexibleSpace: false, cardHeight: min(cardHeight, 226))
+                }
+            }
         }
-        .clipped()
-        .accessibilityHidden(true)
+    }
+
+    private func preferredCardHeight(for availableHeight: CGFloat) -> CGFloat {
+        if dynamicTypeSize.isAccessibilitySize { return 190 }
+        if availableHeight < 700 { return 216 }
+        if availableHeight > 860 { return 268 }
+        return 248
+    }
+
+    private func fullLayout(flexibleSpace: Bool, cardHeight: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: AppSpacing.small) {
+                if store.mode == .demo {
+                    HStack {
+                        DemoModeBadge()
+                        Spacer(minLength: 0)
+                    }
+                }
+
+                if let code = store.pendingJoinCode {
+                    Label("Sign in to review invitation \(code)", systemImage: "envelope.open.fill")
+                        .font(.subheadline.weight(.semibold))
+                }
+
+                WelcomeFeatureCarousel(selection: $selectedFeature, cardHeight: cardHeight)
+            }
+            .padding(.top, dynamicTypeSize.isAccessibilitySize ? AppSpacing.small : 28)
+            .opacity(appeared ? 1 : 0)
+            .offset(y: appeared || reduceMotion ? 0 : 10)
+
+            if flexibleSpace {
+                Spacer(minLength: AppSpacing.medium)
+            } else {
+                Spacer().frame(height: AppSpacing.large)
+            }
+
+            authCluster
+                .opacity(appeared ? 1 : 0)
+                .offset(y: appeared || reduceMotion ? 0 : 8)
+        }
+        .frame(maxWidth: .infinity, maxHeight: flexibleSpace ? .infinity : nil, alignment: .top)
+        .padding(.horizontal, AppSpacing.page)
+        .padding(.bottom, 24)
+    }
+
+    private var authCluster: some View {
+        VStack(spacing: 0) {
+            if store.mode == .demo {
+                Button("Explore the demo") { Task { await store.startDemo() } }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .accessibilityIdentifier("onboarding.demo")
+                    .padding(.bottom, 12)
+
+                Text("No account needed")
+                    .font(.caption)
+                    .foregroundStyle(AppColors.secondaryInk)
+                    .padding(.bottom, AppSpacing.medium)
+            }
+
+            SignInWithAppleButton(.signUp) { request in
+                request.requestedScopes = [.fullName, .email]
+                request.nonce = store.beginAppleSignIn()
+            } onCompletion: { result in
+                Task { await store.handleAppleAuthorization(result) }
+            }
+            .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+            .frame(height: 56)
+            .clipShape(Capsule())
+            .accessibilityIdentifier("onboarding.apple")
+
+            if store.mode == .live {
+                Button("Continue with email") { authMode = .signUp }
+                    .buttonStyle(OutlineButtonStyle())
+                    .accessibilityIdentifier("onboarding.signUp")
+                    .padding(.top, 11)
+
+                existingAccountLine
+                    .padding(.top, 18)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var existingAccountLine: some View {
+        HStack(spacing: 4) {
+            Text("Already have an account?")
+                .font(.subheadline)
+                .foregroundStyle(AppColors.secondaryInk)
+            Button("Sign in") { authMode = .signIn }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(AppColors.ink)
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("onboarding.signIn")
+        }
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: 44)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func revealOnboarding() {
+        guard !appeared else { return }
+        if reduceMotion {
+            appeared = true
+        } else {
+            withAnimation(AppMotion.calm.delay(0.05)) { appeared = true }
+        }
     }
 }
 

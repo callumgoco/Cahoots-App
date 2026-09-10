@@ -2,32 +2,33 @@ import SwiftUI
 import UIKit
 
 enum AppColors {
-    private static let nearBlack = UIColor(red: 5 / 255, green: 5 / 255, blue: 5 / 255, alpha: 1)
-    private static let mint = UIColor(red: 215 / 255, green: 255 / 255, blue: 224 / 255, alpha: 1)
-    private static let darkCard = UIColor(red: 18 / 255, green: 18 / 255, blue: 18 / 255, alpha: 1)
-    private static let darkRaised = UIColor(red: 26 / 255, green: 26 / 255, blue: 26 / 255, alpha: 1)
-    /// Slightly deeper mint so cards lift off the light page.
-    private static let lightCard = UIColor(red: 197 / 255, green: 242 / 255, blue: 210 / 255, alpha: 1)
-    private static let lightRaised = UIColor(red: 186 / 255, green: 235 / 255, blue: 201 / 255, alpha: 1)
-
-    private static func adaptive(light: UIColor, dark: UIColor) -> Color {
+    private static func themed(_ keyPath: KeyPath<AppThemePalette, UIColor>) -> Color {
         Color(uiColor: UIColor { traits in
-            traits.userInterfaceStyle == .dark ? dark : light
+            AppColorThemeBridge.current.palette(for: traits.userInterfaceStyle)[keyPath: keyPath]
         })
     }
 
-    static let page = adaptive(light: mint, dark: nearBlack)
-    static let card = adaptive(light: lightCard, dark: darkCard)
-    static let raised = adaptive(light: lightRaised, dark: darkRaised)
-    static let ink = adaptive(light: nearBlack, dark: mint)
+    /// Soft page wash in light mode; bold/near-black wash in dark mode (per active theme).
+    static var page: Color { themed(\.page) }
+    /// Charcoal (or theme-dark) cards so light mode keeps dark surfaces on the soft page.
+    static var card: Color { themed(\.card) }
+    static var raised: Color { themed(\.raised) }
+    /// Page chrome / primary type on the page background.
+    static var ink: Color { themed(\.ink) }
     /// Label / icon color on ink-filled controls (equals page in this invert).
-    static let onInk = adaptive(light: mint, dark: nearBlack)
-    static let secondaryInk = ink.opacity(0.6)
-    static let brand = ink
-    static let accent = ink
-    static let accentSoft = ink.opacity(0.14)
-    static let warning = Color.orange
-    static let danger = Color.red
+    static var onInk: Color { themed(\.onInk) }
+    static var secondaryInk: Color { ink.opacity(0.6) }
+    /// Soft fill for small page-level chips that should not read as full cards.
+    static var chip: Color { themed(\.chip) }
+    static var brand: Color { ink }
+    static var accent: Color { ink }
+    static var accentSoft: Color { ink.opacity(0.14) }
+    /// Semantic success (completion chips, positive status).
+    static let success = Color(uiColor: UIColor(hex: 0x22C55E))
+    /// Semantic warning (offline, deadline nudges).
+    static let warning = Color(uiColor: UIColor(hex: 0xF59E0B))
+    /// Semantic danger (errors, destructive emphasis).
+    static let danger = Color(uiColor: UIColor(hex: 0xEF4444))
 }
 
 enum AppSpacing {
@@ -75,9 +76,11 @@ struct CahootsCard<Content: View>: View {
     }
 
     var body: some View {
+        // Force dark-scheme tokens inside cards so light mode gets mint type on charcoal surfaces.
         content
             .padding(AppSpacing.medium)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .environment(\.colorScheme, .dark)
             .background(elevated ? AppColors.raised : AppColors.card, in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
             .shadow(color: elevated ? AppShadow.color : .clear, radius: AppShadow.radius, y: AppShadow.y)
     }
@@ -95,7 +98,7 @@ struct PrimaryButtonStyle: ButtonStyle {
             .foregroundStyle(AppColors.onInk)
             .frame(maxWidth: .infinity, minHeight: 54)
             .padding(.horizontal, AppSpacing.medium)
-            .background(AppColors.ink.opacity(isEnabled ? (configuration.isPressed ? 0.72 : 1) : 0.28), in: Capsule())
+            .background(AppColors.ink.opacity(isEnabled ? (configuration.isPressed ? 0.72 : 1) : 0.38), in: Capsule())
             .scaleEffect(!reduceMotion && configuration.isPressed ? 0.98 : 1)
             .animation(reduceMotion ? nil : AppMotion.responsive, value: configuration.isPressed)
     }
@@ -114,8 +117,84 @@ struct SecondaryButtonStyle: ButtonStyle {
             .frame(maxWidth: .infinity, minHeight: 52)
             .padding(.horizontal, AppSpacing.medium)
             .background(AppColors.card.opacity(isEnabled ? (configuration.isPressed ? 0.65 : 1) : 0.55), in: Capsule())
+            .environment(\.colorScheme, .dark)
             .scaleEffect(!reduceMotion && configuration.isPressed && isEnabled ? 0.98 : 1)
             .animation(reduceMotion ? nil : AppMotion.responsive, value: configuration.isPressed)
+    }
+}
+
+/// Quiet CTA for when a filled dark button already owns the screen (e.g. Sign in with Apple).
+struct OutlineButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .foregroundStyle(AppColors.ink.opacity(isEnabled ? (configuration.isPressed ? 0.55 : 1) : 0.35))
+            .frame(maxWidth: .infinity, minHeight: 54)
+            .padding(.horizontal, AppSpacing.medium)
+            .background(AppColors.ink.opacity(configuration.isPressed ? 0.08 : 0.04), in: Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder(AppColors.ink.opacity(isEnabled ? 0.28 : 0.12), lineWidth: 1.5)
+            )
+            .scaleEffect(!reduceMotion && configuration.isPressed && isEnabled ? 0.98 : 1)
+            .animation(reduceMotion ? nil : AppMotion.responsive, value: configuration.isPressed)
+    }
+}
+
+/// Soft page-level text field chrome — mint chip surface, not charcoal cards.
+struct CahootsField<Content: View>: View {
+    let title: String
+    var isFocused: Bool = false
+    @ViewBuilder let content: Content
+
+    init(title: String, isFocused: Bool = false, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.isFocused = isFocused
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.small) {
+            if !title.isEmpty {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AppColors.secondaryInk)
+            }
+            content
+                .cahootsFieldChrome(focused: isFocused)
+        }
+    }
+}
+
+extension View {
+    /// Soft chip field surface for inputs sitting on `AppColors.page`.
+    func cahootsFieldChrome(focused: Bool = false) -> some View {
+        padding(.horizontal, AppSpacing.medium)
+            .frame(maxWidth: .infinity, minHeight: 54, maxHeight: 54, alignment: .leading)
+            .foregroundStyle(AppColors.ink)
+            .tint(AppColors.ink)
+            .background(AppColors.chip, in: RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous)
+                    .strokeBorder(AppColors.ink.opacity(focused ? 0.4 : 0.1), lineWidth: focused ? 1.5 : 1)
+            )
+    }
+
+    /// Continuous page-colored footer for sheet CTAs (avoids the mint/white bar split).
+    func cahootsSheetFooter() -> some View {
+        padding(.horizontal, AppSpacing.page)
+            .padding(.top, AppSpacing.medium)
+            .padding(.bottom, AppSpacing.page)
+            .background(
+                AppColors.page
+                    .shadow(color: AppColors.ink.opacity(0.05), radius: 20, y: -10)
+                    .mask(Rectangle().padding(.top, -32))
+            )
     }
 }
 
@@ -177,7 +256,8 @@ enum FriendFacingCopy {
     static func syncExplanation(for state: SyncState) -> String {
         switch state {
         case .synced: String(localized: "Your streak and position are updated.")
-        case .waiting, .failed: String(localized: "Your workout is saved and will update when you’re back online.")
+        case .waiting: String(localized: "Syncing to your crew now…")
+        case .failed: String(localized: "Couldn’t reach the crew yet. Tap Retry.")
         case .rejected: String(localized: "This check-in didn’t meet the round rules.")
         }
     }
@@ -310,8 +390,9 @@ struct WeekStrip: View {
         case .done: AppColors.accent
         case .today: AppColors.accentSoft
         case .recovery: AppColors.accentSoft
-        case .missed: AppColors.secondaryInk.opacity(0.12)
-        case .rest, .upcoming: AppColors.card
+        case .missed: AppColors.secondaryInk.opacity(0.18)
+        case .rest: AppColors.chip.opacity(0.55)
+        case .upcoming: AppColors.chip
         }
     }
 
@@ -366,7 +447,7 @@ struct AvatarStack: View {
         HStack(spacing: -10) {
             ForEach(users.prefix(5)) { user in
                 AvatarView(user: user, size: 38)
-                    .overlay(Circle().stroke(AppColors.card, lineWidth: 3))
+                    .overlay(Circle().stroke(AppColors.page, lineWidth: 3))
             }
             if users.count > 5 {
                 Text("+\(users.count - 5)")
@@ -374,11 +455,134 @@ struct AvatarStack: View {
                     .frame(width: 38, height: 38)
                     .background(AppColors.ink, in: Circle())
                     .foregroundStyle(AppColors.onInk)
-                    .overlay(Circle().stroke(AppColors.card, lineWidth: 3))
+                    .overlay(Circle().stroke(AppColors.page, lineWidth: 3))
             }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(users.count) group members")
+    }
+}
+
+/// Full-roster “who’s done today” rail — spoiler-safe (no quantities).
+struct CrewTodayStatusRail: View {
+    let entries: [TodayMemberStatusEntry]
+    var title: String = String(localized: "Today’s crew")
+    var avatarSize: CGFloat = 44
+    var accessibilityID: String? = nil
+    var onSelectMember: ((TodayMemberStatusEntry) -> Void)? = nil
+
+    private var summary: String? {
+        CrewAccountabilityCopy.checkInSummary(entries: entries)
+    }
+
+    var body: some View {
+        if !entries.isEmpty {
+            VStack(alignment: .leading, spacing: AppSpacing.small) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AppColors.secondaryInk)
+                if let summary {
+                    Text(summary)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AppColors.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("crew.accountabilitySummary")
+                }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: AppSpacing.medium) {
+                        ForEach(entries) { entry in
+                            memberCell(entry)
+                        }
+                    }
+                }
+            }
+            .modifier(OptionalAccessibilityIdentifier(accessibilityID))
+        }
+    }
+
+    @ViewBuilder
+    private func memberCell(_ entry: TodayMemberStatusEntry) -> some View {
+        let content = VStack(spacing: 6) {
+            ZStack(alignment: .bottomTrailing) {
+                AvatarView(user: entry.user, size: avatarSize)
+                    .overlay {
+                        Circle()
+                            .stroke(ringColor(for: entry.status), lineWidth: entry.status == .pending ? 1.5 : 2.5)
+                            .padding(-2)
+                    }
+                statusBadge(for: entry.status)
+                    .offset(x: 2, y: 2)
+            }
+            Text(entry.isCurrentUser
+                  ? String(localized: "You")
+                  : (entry.user.displayName.split(separator: " ").first.map(String.init) ?? entry.user.displayName))
+                .font(.caption2.bold())
+                .foregroundStyle(AppColors.ink)
+                .lineLimit(1)
+        }
+        .frame(width: max(64, avatarSize + 12))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(entry.isCurrentUser ? String(localized: "You") : entry.user.displayName), \(statusLabel(for: entry.status))")
+
+        if let onSelectMember {
+            Button {
+                onSelectMember(entry)
+            } label: {
+                content
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(.isButton)
+        } else {
+            content
+        }
+    }
+
+    private func ringColor(for status: TodayMemberStatus) -> Color {
+        switch status {
+        case .done: AppColors.ink
+        case .rest: AppColors.secondaryInk
+        case .pending: AppColors.secondaryInk.opacity(0.35)
+        }
+    }
+
+    @ViewBuilder
+    private func statusBadge(for status: TodayMemberStatus) -> some View {
+        switch status {
+        case .done:
+            Image(systemName: "checkmark.circle.fill")
+                .font(.caption.bold())
+                .foregroundStyle(AppColors.onInk)
+                .background(AppColors.ink, in: Circle())
+        case .rest:
+            Image(systemName: "moon.circle.fill")
+                .font(.caption.bold())
+                .foregroundStyle(AppColors.secondaryInk)
+                .background(AppColors.page, in: Circle())
+        case .pending:
+            EmptyView()
+        }
+    }
+
+    private func statusLabel(for status: TodayMemberStatus) -> String {
+        switch status {
+        case .done: String(localized: "done")
+        case .rest: String(localized: "rest day")
+        case .pending: String(localized: "pending")
+        }
+    }
+}
+
+private struct OptionalAccessibilityIdentifier: ViewModifier {
+    let id: String?
+
+    init(_ id: String?) { self.id = id }
+
+    func body(content: Content) -> some View {
+        if let id {
+            content.accessibilityIdentifier(id)
+        } else {
+            content
+        }
     }
 }
 
@@ -402,6 +606,7 @@ struct MetricTile: View {
         }
         .frame(maxWidth: .infinity, minHeight: 94, alignment: .leading)
         .padding(AppSpacing.medium)
+        .environment(\.colorScheme, .dark)
         .background(AppColors.card, in: RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous))
         .accessibilityElement(children: .combine)
     }
@@ -459,7 +664,7 @@ struct OfflineBanner: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
             .foregroundStyle(Color.black)
-            .background(Color.orange)
+            .background(AppColors.warning)
             .accessibilityLabel("Offline. Check-ins will wait to sync.")
     }
 }
@@ -583,27 +788,85 @@ struct AppBannerHost: View {
     }
 }
 
-struct LoadingSkeleton: View {
+/// Full-page brand loader used while the signed-in session hydrates.
+struct BrandLoadingView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var opacity = 0.35
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var spinAngle: Double = 0
+    @State private var breathe = false
+    @State private var appeared = false
 
     var body: some View {
-        VStack(spacing: AppSpacing.medium) {
-            RoundedRectangle(cornerRadius: AppRadius.card).frame(height: 220)
-            HStack {
-                RoundedRectangle(cornerRadius: AppRadius.control).frame(height: 96)
-                RoundedRectangle(cornerRadius: AppRadius.control).frame(height: 96)
+        ZStack {
+            atmosphere
+
+            VStack(spacing: AppSpacing.large) {
+                Image("LoadingMark")
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .foregroundStyle(AppColors.ink)
+                    .frame(width: 92, height: 92)
+                    .rotationEffect(.degrees(spinAngle))
+                    .scaleEffect(reduceMotion ? 1 : (breathe ? 1.05 : 0.96))
+                    .opacity(appeared ? 1 : 0)
+                    .accessibilityHidden(true)
+
+                Text("Getting your crew ready")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AppColors.secondaryInk)
+                    .opacity(appeared ? (reduceMotion ? 0.75 : (breathe ? 0.9 : 0.55)) : 0)
             }
         }
-        .foregroundStyle(AppColors.secondaryInk.opacity(opacity))
-        .padding(AppSpacing.page)
-        .task {
-            guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) { opacity = 0.12 }
-        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task { await play() }
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel("Loading")
     }
+
+    private var atmosphere: some View {
+        ZStack {
+            Circle()
+                .fill(AppColors.ink.opacity(colorScheme == .dark ? 0.14 : 0.08))
+                .frame(width: 220, height: 220)
+                .blur(radius: 42)
+                .scaleEffect(breathe ? 1.18 : 0.88)
+            Circle()
+                .fill(AppColors.chip.opacity(colorScheme == .dark ? 0.55 : 0.85))
+                .frame(width: 120, height: 120)
+                .blur(radius: 18)
+                .scaleEffect(breathe ? 0.9 : 1.12)
+                .opacity(0.7)
+        }
+        .opacity(appeared ? 1 : 0)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    @MainActor
+    private func play() async {
+        withAnimation(reduceMotion ? .easeOut(duration: 0.2) : AppMotion.calm) {
+            appeared = true
+        }
+
+        guard !reduceMotion else { return }
+
+        withAnimation(.easeInOut(duration: 1.35).repeatForever(autoreverses: true)) {
+            breathe = true
+        }
+        // 3-fold mark: a full turn reads as a continuous chase around the ring.
+        withAnimation(.linear(duration: 2.6).repeatForever(autoreverses: false)) {
+            spinAngle = 360
+        }
+    }
 }
+
+#if DEBUG
+#Preview("Brand loading") {
+    BrandLoadingView()
+        .roundPage()
+}
+#endif
 
 struct CahootsEmptyState: View {
     let symbol: String
@@ -624,7 +887,9 @@ struct CahootsEmptyState: View {
         VStack(spacing: AppSpacing.large) {
             Image(systemName: symbol)
                 .font(.system(size: 48, weight: .semibold))
+                .foregroundStyle(AppColors.ink)
                 .frame(width: 96, height: 96)
+                .environment(\.colorScheme, .dark)
                 .background(AppColors.card, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
             VStack(spacing: AppSpacing.small) {
                 Text(title).font(.title.bold()).multilineTextAlignment(.center)
@@ -646,5 +911,50 @@ extension View {
     func roundFormChrome() -> some View {
         scrollContentBackground(.hidden)
             .background(AppColors.page.ignoresSafeArea())
+    }
+}
+
+/// Shared settings block used by Profile, Group settings, and notification sheets.
+struct CahootsSettingsSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    init(_ title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.small) {
+            if !title.isEmpty {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AppColors.secondaryInk)
+                    .padding(.horizontal, 4)
+            }
+            CahootsCard {
+                VStack(alignment: .leading, spacing: AppSpacing.small) {
+                    content
+                }
+            }
+        }
+    }
+}
+
+struct CahootsSettingsLabel: View {
+    let title: String
+    let systemImage: String
+
+    var body: some View {
+        HStack {
+            Label(title, systemImage: systemImage)
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(AppColors.secondaryInk)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
     }
 }

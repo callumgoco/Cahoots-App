@@ -43,6 +43,34 @@ struct LifecycleHardeningTests {
         #expect(result.snapshot.roundResults?.contains { $0.challengeID == challengeID } == true)
     }
 
+    @Test func scheduledChallengeActivatesWhenStartDateHasPassed() {
+        let now = Date.now
+        var snapshot = DemoSeed.make(now: now)
+        // Demo seed already has an active challenge on groups[0]; use a fresh group slot
+        // or replace statuses so this challenge is the only lifecycle target.
+        snapshot.challenges = snapshot.challenges.map { challenge in
+            var copy = challenge
+            if copy.status == .active || copy.status == .scheduled {
+                copy.status = .completed
+            }
+            return copy
+        }
+        let groupID = snapshot.groups[0].id
+        let challengeID = UUID()
+        let challenge = CahootsChallenge(
+            id: challengeID, groupID: groupID, proposalID: nil, title: "Due start",
+            activityType: "push-ups", measurementType: .repetitions, minimumQuantity: 15,
+            frequencyType: .daily, scheduledWeekdays: Set(1...7), timesPerWeek: nil,
+            startDate: now.addingTimeInterval(-86_400), endDate: now.addingTimeInterval(13 * 86_400),
+            challengeTimezone: "Europe/London", dailyDeadlineMinutes: 21 * 60, recoveryDayAllowance: 2,
+            status: .scheduled, scoringVersion: 1, createdAt: now.addingTimeInterval(-2 * 86_400)
+        )
+        snapshot.challenges.append(challenge)
+        let result = CahootsStateReconciler.reconcile(snapshot: snapshot, at: now)
+        #expect(result.snapshot.challenges.first { $0.id == challengeID }?.status == .active)
+        #expect(result.events.contains { if case .challengeStarted(challengeID) = $0 { return true }; return false })
+    }
+
     @Test func migrationCreatesGroupScopedState() {
         var snapshot = DemoSeed.make()
         snapshot.schemaVersion = nil
@@ -168,6 +196,50 @@ struct MultiGroupAndRoutingTests {
         let groupID = UUID(uuidString: "10000000-0000-0000-0000-000000000001")!
         #expect(AppRoute.parse(URL(string: "cahoots://log/\(groupID.uuidString)")!, inviteHost: "invite.cahoots.test") == .logWorkout(groupID: groupID))
         #expect(AppRoute.parse(URL(string: "https://invite.cahoots.test/log/\(groupID.uuidString)")!, inviteHost: "invite.cahoots.test") == .logWorkout(groupID: groupID))
+        let proposalID = UUID(uuidString: "20000000-0000-0000-0000-000000000002")!
+        #expect(AppRoute.parse(URL(string: "cahoots://vote/\(groupID.uuidString)")!, inviteHost: "invite.cahoots.test") == .openVote(groupID: groupID, proposalID: nil))
+        #expect(AppRoute.parse(URL(string: "cahoots://vote/\(groupID.uuidString)/\(proposalID.uuidString)")!, inviteHost: "invite.cahoots.test") == .openVote(groupID: groupID, proposalID: proposalID))
+        #expect(AppRoute.parse(URL(string: "https://invite.cahoots.test/vote/\(groupID.uuidString)/\(proposalID.uuidString)")!, inviteHost: "invite.cahoots.test") == .openVote(groupID: groupID, proposalID: proposalID))
+        #expect(
+            AppRoute.deepLink(for: .init(
+                id: "test",
+                kind: .deadline,
+                fireDate: .now.addingTimeInterval(60),
+                groupID: groupID,
+                challengeID: nil,
+                proposalID: nil
+            )) == "cahoots://log/\(groupID.uuidString)"
+        )
+        #expect(
+            AppRoute.deepLink(for: .init(
+                id: "vote",
+                kind: .vote,
+                fireDate: .now.addingTimeInterval(60),
+                groupID: groupID,
+                challengeID: nil,
+                proposalID: proposalID
+            )) == "cahoots://vote/\(groupID.uuidString)/\(proposalID.uuidString)"
+        )
+        #expect(
+            AppRoute.deepLink(for: .init(
+                id: "voteOpened",
+                kind: .voteOpened,
+                fireDate: .now.addingTimeInterval(60),
+                groupID: groupID,
+                challengeID: nil,
+                proposalID: proposalID
+            )) == "cahoots://vote/\(groupID.uuidString)/\(proposalID.uuidString)"
+        )
+        #expect(
+            AppRoute.deepLink(for: .init(
+                id: "roundStarting",
+                kind: .roundStarting,
+                fireDate: .now.addingTimeInterval(60),
+                groupID: groupID,
+                challengeID: nil,
+                proposalID: nil
+            )) == "cahoots://log/\(groupID.uuidString)"
+        )
     }
 }
 
@@ -198,6 +270,52 @@ struct NotificationPlanningTests {
             ScheduleEngine.isSameRequirementDay($0.fireDate, day, challenge: challenge)
         })
     }
+
+    @Test func newlyOpenedVoteSchedulesVoteOpenedAlert() {
+        let now = Date.now
+        var snapshot = DemoSeed.make(now: now)
+        guard var proposal = snapshot.proposals.first(where: { $0.status == .voting }) else {
+            Issue.record("Demo seed missing open proposal")
+            return
+        }
+        proposal.votingStartsAt = now.addingTimeInterval(-10)
+        proposal.votingEndsAt = now.addingTimeInterval(48 * 3_600)
+        if let index = snapshot.proposals.firstIndex(where: { $0.id == proposal.id }) {
+            snapshot.proposals[index] = proposal
+        }
+        snapshot.votes.removeAll { $0.proposalID == proposal.id && $0.userID == snapshot.currentUser.id }
+        let plan = NotificationPlanBuilder.build(snapshot: snapshot, now: now)
+        // votingStartsAt + 45s is still in the future relative to -10s start... wait -10+45 = +35 from now
+        #expect(plan.contains { $0.kind == .voteOpened && $0.proposalID == proposal.id })
+    }
+
+    @Test func scheduledRoundPlansRoundStartingAlert() {
+        let now = Date.now
+        var snapshot = DemoSeed.make(now: now)
+        guard var challenge = snapshot.challenges.first else {
+            Issue.record("Demo seed missing challenge")
+            return
+        }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: challenge.challengeTimezone) ?? .current
+        let startDay = calendar.startOfDay(for: now.addingTimeInterval(2 * 86_400))
+        challenge.status = .scheduled
+        challenge.startDate = startDay
+        challenge.endDate = calendar.date(byAdding: .day, value: 20, to: startDay) ?? startDay
+        if let index = snapshot.challenges.firstIndex(where: { $0.id == challenge.id }) {
+            snapshot.challenges[index] = challenge
+        }
+        let plan = NotificationPlanBuilder.build(snapshot: snapshot, now: now)
+        #expect(plan.contains { $0.kind == .roundStarting && $0.challengeID == challenge.id })
+    }
+
+    @Test func crewUpdateCopyAvoidsQuantities() {
+        let body = CrewUpdateCopy.voteOpenedBody(actorName: "Jordan")
+        #expect(body.contains("Jordan"))
+        #expect(body.localizedCaseInsensitiveContains("vote"))
+        #expect(!body.contains("15"))
+        #expect(CrewUpdateCopy.roundStartedBody(title: "Push-ups").localizedCaseInsensitiveContains("started"))
+    }
 }
 
 @MainActor
@@ -207,7 +325,7 @@ private final class AcceptingRepository: AppRepository {
     func load() async throws -> DemoSnapshot { DemoSeed.make() }
     func save(_ snapshot: DemoSnapshot) async throws { savedSnapshots.append(snapshot) }
     func reset() async throws -> DemoSnapshot { DemoSeed.make() }
-    func syncSubmission(_ submission: Submission) async -> SubmissionSyncResult {
+    func syncSubmission(_ submission: Submission, challengeTimezone: String) async -> SubmissionSyncResult {
         .accepted(.init(submissionID: submission.id, acceptedAt: .now))
     }
     func perform(_ command: RepositoryCommand) async throws -> DemoSnapshot? {
@@ -216,8 +334,8 @@ private final class AcceptingRepository: AppRepository {
         try await save(updated)
         return updated
     }
-    func requestClipUploadURL(groupID: UUID, challengeID: UUID, requirementDate: Date, clipID: UUID) async throws -> ClipUploadTicket {
-        ClipUploadTicket(storagePath: "test/\(clipID.uuidString).mov", uploadURL: URL(fileURLWithPath: "/dev/null"), token: nil, clipID: clipID)
+    func requestClipUploadURL(groupID: UUID, challengeID: UUID, requirementDateToken: String, clipID: UUID) async throws -> ClipUploadTicket {
+        ClipUploadTicket(storagePath: "test/\(requirementDateToken)/\(clipID.uuidString).mov", uploadURL: URL(fileURLWithPath: "/dev/null"), token: nil, clipID: clipID)
     }
     func uploadClip(ticket: ClipUploadTicket, fileURL: URL) async throws {}
     func requestClipDownloadURL(clipID: UUID) async throws -> ClipDownloadTicket {
@@ -231,9 +349,9 @@ private final class AuthRequiredRepository: AppRepository {
     func load() async throws -> DemoSnapshot { throw RepositoryError.authenticationRequired }
     func save(_ snapshot: DemoSnapshot) async throws {}
     func reset() async throws -> DemoSnapshot { throw RepositoryError.authenticationRequired }
-    func syncSubmission(_ submission: Submission) async -> SubmissionSyncResult { .authenticationRequired }
+    func syncSubmission(_ submission: Submission, challengeTimezone: String) async -> SubmissionSyncResult { .authenticationRequired() }
     func perform(_ command: RepositoryCommand) async throws -> DemoSnapshot? { throw RepositoryError.authenticationRequired }
-    func requestClipUploadURL(groupID: UUID, challengeID: UUID, requirementDate: Date, clipID: UUID) async throws -> ClipUploadTicket {
+    func requestClipUploadURL(groupID: UUID, challengeID: UUID, requirementDateToken: String, clipID: UUID) async throws -> ClipUploadTicket {
         throw RepositoryError.authenticationRequired
     }
     func uploadClip(ticket: ClipUploadTicket, fileURL: URL) async throws {
@@ -251,13 +369,37 @@ private final class RetryingRepository: AppRepository {
     func load() async throws -> DemoSnapshot { DemoSeed.make() }
     func save(_ snapshot: DemoSnapshot) async throws {}
     func reset() async throws -> DemoSnapshot { DemoSeed.make() }
-    func syncSubmission(_ submission: Submission) async -> SubmissionSyncResult {
+    func syncSubmission(_ submission: Submission, challengeTimezone: String) async -> SubmissionSyncResult {
         syncCount += 1
         return .retryable("Temporary connection problem", retryAfter: nil)
     }
     func perform(_ command: RepositoryCommand) async throws -> DemoSnapshot? { nil }
-    func requestClipUploadURL(groupID: UUID, challengeID: UUID, requirementDate: Date, clipID: UUID) async throws -> ClipUploadTicket {
-        ClipUploadTicket(storagePath: "test/\(clipID.uuidString).mov", uploadURL: URL(fileURLWithPath: "/dev/null"), token: nil, clipID: clipID)
+    func requestClipUploadURL(groupID: UUID, challengeID: UUID, requirementDateToken: String, clipID: UUID) async throws -> ClipUploadTicket {
+        ClipUploadTicket(storagePath: "test/\(requirementDateToken)/\(clipID.uuidString).mov", uploadURL: URL(fileURLWithPath: "/dev/null"), token: nil, clipID: clipID)
+    }
+    func uploadClip(ticket: ClipUploadTicket, fileURL: URL) async throws {}
+    func requestClipDownloadURL(clipID: UUID) async throws -> ClipDownloadTicket {
+        ClipDownloadTicket(downloadURL: URL(fileURLWithPath: "/dev/null"), storagePath: "test/\(clipID.uuidString).mov", clipID: clipID, expiresIn: 60)
+    }
+}
+
+@MainActor
+private final class PartialUploadRetryRepository: AppRepository {
+    var mode: AppMode = .demo
+    func load() async throws -> DemoSnapshot { DemoSeed.make() }
+    func save(_ snapshot: DemoSnapshot) async throws {}
+    func reset() async throws -> DemoSnapshot { DemoSeed.make() }
+    func syncSubmission(_ submission: Submission, challengeTimezone: String) async -> SubmissionSyncResult {
+        let uploaded = submission.clips.map { clip -> WorkoutClip in
+            var copy = clip
+            copy.remotePath = "group/challenge/day/\(clip.id.uuidString).mov"
+            return copy
+        }
+        return .retryable("submit failed after upload", retryAfter: nil, uploadedClips: uploaded)
+    }
+    func perform(_ command: RepositoryCommand) async throws -> DemoSnapshot? { nil }
+    func requestClipUploadURL(groupID: UUID, challengeID: UUID, requirementDateToken: String, clipID: UUID) async throws -> ClipUploadTicket {
+        ClipUploadTicket(storagePath: "test/\(requirementDateToken)/\(clipID.uuidString).mov", uploadURL: URL(fileURLWithPath: "/dev/null"), token: nil, clipID: clipID)
     }
     func uploadClip(ticket: ClipUploadTicket, fileURL: URL) async throws {}
     func requestClipDownloadURL(clipID: UUID) async throws -> ClipDownloadTicket {
@@ -310,7 +452,7 @@ struct OfflineSyncTests {
         }
         snapshot.pendingOperations[0].retryCount = 0
         snapshot.pendingOperations[0].nextRetryAt = now
-        let expectedDelays: [TimeInterval] = [5, 30, 120, 600, 1_800]
+        let expectedDelays: [TimeInterval] = [1, 3, 8, 20, 60]
 
         for delay in expectedDelays {
             snapshot = await coordinator.drain(snapshot, connected: true, force: true)
@@ -323,6 +465,28 @@ struct OfflineSyncTests {
 
         snapshot = coordinator.prepareManualRetry(snapshot, clientGeneratedID: clientID)
         #expect(snapshot.pendingOperations[0].retryCount == 0)
+        #expect(snapshot.submissions.first { $0.clientGeneratedID == clientID }?.syncState == .waiting)
+    }
+
+    @MainActor
+    @Test func retryableResultPersistsUploadedClipRemotePaths() async {
+        let now = Date.now
+        let repository = PartialUploadRetryRepository()
+        let coordinator = OfflineSyncCoordinator(repository: repository, clock: FixedAppClock(now: now))
+        var snapshot = SnapshotMigrator.migrate(DemoSeed.make(now: now, includePendingSubmission: true))
+        guard let clientID = snapshot.pendingOperations.first?.clientGeneratedID,
+              let submissionIndex = snapshot.submissions.firstIndex(where: { $0.clientGeneratedID == clientID }) else {
+            Issue.record("Missing pending operation")
+            return
+        }
+        let clipID = UUID()
+        snapshot.submissions[submissionIndex].clips = [
+            WorkoutClip(id: clipID, kind: .finish, durationSeconds: 3, localFilename: "clip.mov", remotePath: nil, createdAt: now)
+        ]
+        snapshot.pendingOperations[0].nextRetryAt = now
+        snapshot = await coordinator.drain(snapshot, connected: true, force: true)
+        let path = snapshot.submissions.first { $0.clientGeneratedID == clientID }?.clips.first?.remotePath
+        #expect(path == "group/challenge/day/\(clipID.uuidString).mov")
         #expect(snapshot.submissions.first { $0.clientGeneratedID == clientID }?.syncState == .waiting)
     }
 }

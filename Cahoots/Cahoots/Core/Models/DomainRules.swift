@@ -35,9 +35,11 @@ enum WorkoutClipPathRules {
         groupID: UUID,
         challengeID: UUID,
         userID: UUID,
-        requirementDate: Date
+        requirementDate: Date,
+        challengeTimezone: String = "UTC"
     ) -> Bool {
-        let dateToken = dateToken(for: requirementDate)
+        let dateToken = ScheduleEngine.requirementDateToken(for: requirementDate, timeZoneIdentifier: challengeTimezone)
+            ?? utcDateToken(requirementDate)
         let expectedPrefix = [
             groupID.uuidString,
             challengeID.uuidString,
@@ -52,7 +54,7 @@ enum WorkoutClipPathRules {
         return filename.dropLast(4).isEmpty == false
     }
 
-    private static func dateToken(for date: Date) -> String {
+    private static func utcDateToken(_ date: Date) -> String {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? TimeZone(identifier: "UTC")!
         let components = calendar.dateComponents([.year, .month, .day], from: date)
@@ -179,9 +181,56 @@ enum ScheduleEngine {
         calendar(for: challenge)?.startOfDay(for: date)
     }
 
+    /// Calendar-date token for a requirement day.
+    /// Locally written dates use challenge-local midnight; legacy `app-snapshot` payloads used UTC midnight of the Postgres `date`.
+    static func requirementDateToken(for date: Date, challenge: CahootsChallenge) -> String? {
+        requirementDateToken(for: date, timeZoneIdentifier: challenge.challengeTimezone)
+    }
+
+    /// Wire format for Edge Functions / Postgres `date` columns — always `yyyy-MM-dd` in the challenge timezone.
+    static func requirementDateToken(for date: Date, timeZoneIdentifier: String) -> String? {
+        if let utcToken = utcMidnightDateToken(date) {
+            return utcToken
+        }
+        guard let timezone = TimeZone(identifier: timeZoneIdentifier) else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timezone
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        guard let year = parts.year, let month = parts.month, let day = parts.day else { return nil }
+        return String(format: "%04d-%02d-%02d", year, month, day)
+    }
+
     static func isSameRequirementDay(_ first: Date, _ second: Date, challenge: CahootsChallenge) -> Bool {
-        guard let calendar = calendar(for: challenge) else { return false }
-        return calendar.isDate(first, inSameDayAs: second)
+        guard let firstToken = requirementDateToken(for: first, challenge: challenge),
+              let secondToken = requirementDateToken(for: second, challenge: challenge) else {
+            return false
+        }
+        return firstToken == secondToken
+    }
+
+    /// Reconstruct challenge-local start-of-day from a Postgres `yyyy-MM-dd` date token.
+    static func date(fromWireToken token: String, timeZoneIdentifier: String) -> Date? {
+        let parts = token.split(separator: "-")
+        guard parts.count == 3,
+              let year = Int(parts[0]),
+              let month = Int(parts[1]),
+              let day = Int(parts[2]),
+              let timezone = TimeZone(identifier: timeZoneIdentifier) else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timezone
+        return calendar.date(from: DateComponents(year: year, month: month, day: day))
+    }
+
+    /// When a Date is exactly midnight UTC, treat Y-M-D as a calendar date (legacy snapshot encoding).
+    private static func utcMidnightDateToken(_ date: Date) -> String? {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(secondsFromGMT: 0) ?? TimeZone(identifier: "UTC")!
+        let parts = utc.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+        guard parts.hour == 0, parts.minute == 0, (parts.second ?? 0) == 0,
+              let year = parts.year, let month = parts.month, let day = parts.day else {
+            return nil
+        }
+        return String(format: "%04d-%02d-%02d", year, month, day)
     }
 
     static func startInstant(for challenge: CahootsChallenge) -> Date? {
@@ -289,6 +338,7 @@ enum GroupPermissionRules {
 
     static func canChangeRoles(_ role: GroupRole) -> Bool { role == .owner }
     static func canEditSettings(_ role: GroupRole) -> Bool { role == .owner }
+    static func canDelete(_ role: GroupRole) -> Bool { role == .owner }
 }
 
 enum TextSanitizer {

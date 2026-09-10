@@ -14,6 +14,7 @@ enum RepositoryCommand: Sendable {
     case transferOwnership(groupID: UUID, to: UUID)
     case removeMember(groupID: UUID, userID: UUID)
     case leaveGroup(UUID)
+    case deleteGroup(UUID)
     case revokeInvites(groupID: UUID)
     case regenerateInvite(groupID: UUID)
     case block(UUID)
@@ -44,7 +45,7 @@ enum SnapshotCommandApplier {
             snapshot.groups.append(group)
             snapshot.memberships.append(.init(
                 id: UUID(), groupID: group.id, userID: snapshot.currentUser.id, role: .owner,
-                status: .active, joinedAt: now, leftAt: nil, notificationLevel: .digest
+                status: .active, joinedAt: now, leftAt: nil, notificationLevel: .immediate
             ))
             snapshot.invites.append(newInvite)
             snapshot.activity.insert(.init(
@@ -80,7 +81,7 @@ enum SnapshotCommandApplier {
             }
             snapshot.memberships.append(.init(
                 id: UUID(), groupID: group.id, userID: snapshot.currentUser.id, role: .member,
-                status: .active, joinedAt: now, leftAt: nil, notificationLevel: .digest
+                status: .active, joinedAt: now, leftAt: nil, notificationLevel: .immediate
             ))
             if let index = snapshot.invites.firstIndex(where: { $0.id == existing.id }) {
                 snapshot.invites[index].useCount += 1
@@ -234,6 +235,41 @@ enum SnapshotCommandApplier {
                 for inviteIndex in snapshot.invites.indices where snapshot.invites[inviteIndex].groupID == groupID && snapshot.invites[inviteIndex].revokedAt == nil {
                     snapshot.invites[inviteIndex].revokedAt = now
                 }
+            }
+
+        case .deleteGroup(let groupID):
+            guard let membership = snapshot.memberships.first(where: {
+                $0.groupID == groupID && $0.userID == snapshot.currentUser.id && $0.status == .active
+            }), GroupPermissionRules.canDelete(membership.role) else {
+                throw RepositoryError.server("You do not have permission to do that.")
+            }
+            let challengeIDs = Set(snapshot.challenges.filter { $0.groupID == groupID }.map(\.id))
+            let proposalIDs = Set(snapshot.proposals.filter { $0.groupID == groupID }.map(\.id))
+            let removedClientIDs = Set(snapshot.submissions.filter { challengeIDs.contains($0.challengeID) }.map(\.clientGeneratedID))
+            snapshot.groups.removeAll { $0.id == groupID }
+            snapshot.memberships.removeAll { $0.groupID == groupID }
+            snapshot.invites.removeAll { $0.groupID == groupID }
+            snapshot.challenges.removeAll { $0.groupID == groupID }
+            snapshot.proposals.removeAll { $0.groupID == groupID }
+            snapshot.votes.removeAll { proposalIDs.contains($0.proposalID) }
+            snapshot.submissions.removeAll { challengeIDs.contains($0.challengeID) }
+            snapshot.scoreEvents.removeAll { challengeIDs.contains($0.challengeID) }
+            snapshot.recoveryDays.removeAll { challengeIDs.contains($0.challengeID) }
+            snapshot.leaderboard.removeAll { $0.groupID == groupID }
+            snapshot.allTimeLeaderboard.removeAll { $0.groupID == groupID }
+            snapshot.activity.removeAll { $0.groupID == groupID }
+            snapshot.reports.removeAll { $0.groupID == groupID }
+            snapshot.pendingOperations.removeAll { removedClientIDs.contains($0.clientGeneratedID) }
+            if var settings = snapshot.notificationSettings {
+                settings.groups.removeAll { $0.groupID == groupID }
+                snapshot.notificationSettings = settings
+            }
+            if snapshot.notificationPreference.groupID == groupID {
+                snapshot.notificationPreference.groupID = nil
+            }
+            if var results = snapshot.roundResults {
+                results.removeAll { $0.groupID == groupID }
+                snapshot.roundResults = results
             }
 
         case .revokeInvites(let groupID):

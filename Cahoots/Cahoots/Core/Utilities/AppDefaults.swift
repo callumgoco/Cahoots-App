@@ -2,17 +2,28 @@ import Foundation
 
 /// Canonical UserDefaults keys for Cahoots, with one-shot migration from legacy `round.*` keys.
 enum AppDefaults {
-    static let onboardingComplete = "cahoots.onboarding.complete"
-    static let activeGroupID = "cahoots.activeGroupID"
-    static let pendingWorkoutPrefix = "cahoots.pendingWorkoutSession."
-    static let proposalDraftPrefix = "cahoots.proposalDraft."
-    static let notificationPrefix = "cahoots."
+    // Immutable string keys are nonisolated so background actors (e.g. NotificationService)
+    // can read them under SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor.
+    nonisolated static let onboardingComplete = "cahoots.onboarding.complete"
+    nonisolated static let activeGroupID = "cahoots.activeGroupID"
+    nonisolated static let splashPlayed = "cahoots.splash.played"
+    nonisolated static let colorTheme = "cahoots.colorTheme"
+    nonisolated static let pendingWorkoutPrefix = "cahoots.pendingWorkoutSession."
+    nonisolated static let proposalDraftPrefix = "cahoots.proposalDraft."
+    nonisolated static let notificationPrefix = "cahoots."
+    nonisolated static let memberCountPrefix = "cahoots.memberCount."
 
-    static let legacyOnboardingComplete = "round.onboarding.complete"
-    static let legacyActiveGroupID = "round.activeGroupID"
-    static let legacyPendingWorkoutPrefix = "round.pendingWorkoutSession."
-    static let legacyProposalDraftPrefix = "round.proposalDraft."
-    static let legacyNotificationPrefix = "round."
+    nonisolated static let legacyOnboardingComplete = "round.onboarding.complete"
+    nonisolated static let legacyActiveGroupID = "round.activeGroupID"
+    nonisolated static let legacyPendingWorkoutPrefix = "round.pendingWorkoutSession."
+    nonisolated static let legacyProposalDraftPrefix = "round.proposalDraft."
+    nonisolated static let legacyNotificationPrefix = "round."
+
+    /// True when XCTest is driving the process — skip long splash choreography.
+    static var isRunningUITests: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+            || ProcessInfo.processInfo.arguments.contains("-skipSplash")
+    }
 
     static func migrateLegacyKeysIfNeeded(defaults: UserDefaults = .standard) {
         migrateBool(from: legacyOnboardingComplete, to: onboardingComplete, defaults: defaults)

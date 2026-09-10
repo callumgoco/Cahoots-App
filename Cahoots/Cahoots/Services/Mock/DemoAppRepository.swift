@@ -30,7 +30,7 @@ final class DemoAppRepository: AppRepository {
         return seed
     }
 
-    func syncSubmission(_ submission: Submission) async -> SubmissionSyncResult {
+    func syncSubmission(_ submission: Submission, challengeTimezone: String) async -> SubmissionSyncResult {
         .accepted(.init(submissionID: submission.id, acceptedAt: .now))
     }
 
@@ -41,9 +41,9 @@ final class DemoAppRepository: AppRepository {
         return updated
     }
 
-    func requestClipUploadURL(groupID: UUID, challengeID: UUID, requirementDate: Date, clipID: UUID) async throws -> ClipUploadTicket {
+    func requestClipUploadURL(groupID: UUID, challengeID: UUID, requirementDateToken: String, clipID: UUID) async throws -> ClipUploadTicket {
         ClipUploadTicket(
-            storagePath: "demo/\(groupID.uuidString)/\(clipID.uuidString).mov",
+            storagePath: "demo/\(groupID.uuidString)/\(requirementDateToken)/\(clipID.uuidString).mov",
             uploadURL: URL(fileURLWithPath: "/dev/null"),
             token: nil,
             clipID: clipID

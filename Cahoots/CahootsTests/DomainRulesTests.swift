@@ -126,6 +126,67 @@ struct CheckInSubmissionRulesTests {
     }
 }
 
+struct ScheduleEngineRequirementDateTests {
+    private func challenge(timezone: String, day: Date) -> CahootsChallenge {
+        CahootsChallenge(
+            id: UUID(), groupID: UUID(), proposalID: nil, title: "Test", activityType: "push-ups",
+            measurementType: .repetitions, minimumQuantity: 15, frequencyType: .daily,
+            scheduledWeekdays: Set(1...7), timesPerWeek: nil, startDate: day,
+            endDate: day.addingTimeInterval(10 * 86_400), challengeTimezone: timezone,
+            dailyDeadlineMinutes: 12 * 60, recoveryDayAllowance: 2, status: .active,
+            scoringVersion: 1, createdAt: day
+        )
+    }
+
+    private func utcMidnight(year: Int, month: Int, day: Int) -> Date {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(secondsFromGMT: 0)!
+        return utc.date(from: DateComponents(year: year, month: month, day: day))!
+    }
+
+    @Test func legacyUTCMidnightMatchesTodayInLosAngeles() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        let day = calendar.date(from: DateComponents(year: 2026, month: 9, day: 10))!
+        let challenge = challenge(timezone: "America/Los_Angeles", day: day)
+        let legacyUTCMidnight = utcMidnight(year: 2026, month: 9, day: 10)
+        let afternoonLocal = calendar.date(byAdding: .hour, value: 15, to: day)!
+        #expect(ScheduleEngine.isSameRequirementDay(legacyUTCMidnight, afternoonLocal, challenge: challenge))
+        #expect(ScheduleEngine.requirementDateToken(for: legacyUTCMidnight, challenge: challenge) == "2026-09-10")
+    }
+
+    @Test func legacyUTCMidnightDoesNotMatchPreviousEveningInLosAngeles() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        let day = calendar.date(from: DateComponents(year: 2026, month: 9, day: 10))!
+        let challenge = challenge(timezone: "America/Los_Angeles", day: day)
+        let legacyUTCMidnight = utcMidnight(year: 2026, month: 9, day: 10)
+        let previousEvening = calendar.date(byAdding: .hour, value: -2, to: day)! // Sept 9 10pm
+        #expect(!ScheduleEngine.isSameRequirementDay(legacyUTCMidnight, previousEvening, challenge: challenge))
+    }
+
+    @Test func challengeLocalMidnightMatchesTodayInTokyo() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Tokyo")!
+        let day = calendar.date(from: DateComponents(year: 2026, month: 9, day: 10))!
+        let challenge = challenge(timezone: "Asia/Tokyo", day: day)
+        let localMidnight = calendar.startOfDay(for: day)
+        let afternoonLocal = calendar.date(byAdding: .hour, value: 14, to: day)!
+        #expect(ScheduleEngine.isSameRequirementDay(localMidnight, afternoonLocal, challenge: challenge))
+        #expect(ScheduleEngine.requirementDateToken(for: localMidnight, challenge: challenge) == "2026-09-10")
+    }
+
+    @Test func legacyUTCMidnightMatchesTodayInTokyo() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Tokyo")!
+        let day = calendar.date(from: DateComponents(year: 2026, month: 9, day: 10))!
+        let challenge = challenge(timezone: "Asia/Tokyo", day: day)
+        let legacyUTCMidnight = utcMidnight(year: 2026, month: 9, day: 10)
+        let afternoonLocal = calendar.date(byAdding: .hour, value: 14, to: day)!
+        #expect(ScheduleEngine.isSameRequirementDay(legacyUTCMidnight, afternoonLocal, challenge: challenge))
+    }
+}
+
 struct ScoringTests {
     @Test func baseScoring() { #expect(ScoringEngine.points(completedQuantity: 15, minimumQuantity: 15) == 100) }
     @Test func partialCompletion() { #expect(ScoringEngine.points(completedQuantity: 14, minimumQuantity: 15) == 0) }
@@ -148,6 +209,10 @@ struct VotingTests {
         #expect(VotingEngine.outcome(eligibleVoters: 2, choices: [.accept], now: .now, closesAt: .now.addingTimeInterval(100)) == .open)
         #expect(VotingEngine.outcome(eligibleVoters: 2, choices: [.accept, .accept], now: .now, closesAt: .now.addingTimeInterval(100)) == .passed)
     }
+    @Test func soloEligibleVotersCannotPass() {
+        #expect(VotingEngine.outcome(eligibleVoters: 1, choices: [.accept], now: .now, closesAt: .now.addingTimeInterval(100)) == .failed)
+        #expect(VotingEngine.outcome(eligibleVoters: 0, choices: [], now: .now, closesAt: .now.addingTimeInterval(100)) == .failed)
+    }
     @Test func tieFails() {
         #expect(VotingEngine.outcome(eligibleVoters: 4, choices: [.accept, .accept, .reject, .reject], now: .now, closesAt: .now.addingTimeInterval(100)) == .failed)
     }
@@ -165,6 +230,20 @@ struct VotingTests {
     @Test func deadlineFinalizesWithoutFullParticipation() {
         let now = Date.now
         #expect(VotingEngine.outcome(eligibleVoters: 5, choices: [.accept, .accept, .accept], now: now, closesAt: now.addingTimeInterval(-1)) == .passed)
+    }
+
+    @Test func votingWindowCopySurfacesAbsoluteCloseAndSoloHint() {
+        let now = Date(timeIntervalSince1970: 1_778_000_000)
+        let ends = now.addingTimeInterval(48 * 3_600)
+        let open = VotingWindowCopy.statusLine(endsAt: ends, now: now)
+        #expect(open.hasPrefix("Closes "))
+        #expect(open.contains("("))
+        #expect(VotingWindowCopy.statusLine(endsAt: now.addingTimeInterval(-1), now: now) == "Voting closed")
+        #expect(VotingWindowCopy.soloVoteDisabledHint.localizedCaseInsensitiveContains("2"))
+        let footnote = VotingWindowCopy.reviewFootnote(canPutToVote: true, closesAt: ends)
+        #expect(footnote.localizedCaseInsensitiveContains("48"))
+        #expect(VotingWindowCopy.reviewFootnote(canPutToVote: false, closesAt: ends).localizedCaseInsensitiveContains("invite"))
+        #expect(VotingWindowCopy.estimatedCloseDate(from: now) == ends)
     }
 }
 
@@ -247,6 +326,26 @@ struct IntegrityTests {
         #expect(!GroupPermissionRules.canChangeRoles(.admin))
         #expect(GroupPermissionRules.canEditSettings(.owner))
         #expect(!GroupPermissionRules.canEditSettings(.admin))
+        #expect(GroupPermissionRules.canDelete(.owner))
+        #expect(!GroupPermissionRules.canDelete(.admin))
+        #expect(!GroupPermissionRules.canDelete(.member))
+    }
+
+    @Test func ownerCanDeleteGroupAndNonOwnerCannot() throws {
+        var snapshot = DemoSeed.make()
+        let ownedGroupID = snapshot.groups.first { $0.ownerID == snapshot.currentUser.id }!.id
+        let otherGroupID = snapshot.groups.first { $0.ownerID != snapshot.currentUser.id }!.id
+
+        #expect(throws: RepositoryError.self) {
+            try SnapshotCommandApplier.apply(.deleteGroup(otherGroupID), to: snapshot)
+        }
+
+        let (updated, _) = try SnapshotCommandApplier.apply(.deleteGroup(ownedGroupID), to: snapshot)
+        #expect(!updated.groups.contains { $0.id == ownedGroupID })
+        #expect(!updated.memberships.contains { $0.groupID == ownedGroupID })
+        #expect(!updated.challenges.contains { $0.groupID == ownedGroupID })
+        #expect(!updated.activity.contains { $0.groupID == ownedGroupID })
+        #expect(updated.groups.contains { $0.id == otherGroupID })
     }
 
     private func entry(_ name: String, points: Int, completed: Int, longest: Int, achieved: Date) -> LeaderboardEntry {
@@ -265,6 +364,26 @@ struct WorkoutClipPathRulesTests {
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         let date = calendar.date(from: DateComponents(year: 2026, month: 9, day: 9))!
         let path = "\(groupID.uuidString.lowercased())/\(challengeID.uuidString.lowercased())/2026-09-09/\(userID.uuidString.lowercased())/\(clipID.uuidString.lowercased()).mov"
+        #expect(WorkoutClipPathRules.isValid(
+            storagePath: path,
+            groupID: groupID,
+            challengeID: challengeID,
+            userID: userID,
+            requirementDate: date
+        ))
+    }
+
+    @Test func acceptsSwiftUppercaseUUIDStoragePath() {
+        let groupID = UUID(uuidString: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee")!
+        let challengeID = UUID(uuidString: "11111111-2222-4333-8444-555555555555")!
+        let userID = UUID(uuidString: "99999999-8888-4777-8666-555555555555")!
+        let clipID = UUID(uuidString: "abcdefab-cdef-4abc-8def-abcdefabcdef")!
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let date = calendar.date(from: DateComponents(year: 2026, month: 9, day: 10))!
+        // Mirrors clip-upload-url before lowercase normalization: Swift uuidString is uppercase.
+        let path = "\(groupID.uuidString)/\(challengeID.uuidString)/2026-09-10/\(userID.uuidString)/\(clipID.uuidString).mov"
+        #expect(path != path.lowercased())
         #expect(WorkoutClipPathRules.isValid(
             storagePath: path,
             groupID: groupID,

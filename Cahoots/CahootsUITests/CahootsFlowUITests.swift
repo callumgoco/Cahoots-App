@@ -4,7 +4,7 @@ final class CahootsFlowUITests: XCTestCase {
     @MainActor
     func testCompleteOnboardingAndEnterDemo() throws {
         let app = launch(reset: true)
-        XCTAssertTrue(app.staticTexts["Set one goal with friends"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Challenge your crew"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["onboarding.demo"].waitForExistence(timeout: 2))
         XCTAssertEqual(app.buttons["onboarding.demo"].label, "Explore the demo")
         app.buttons["onboarding.demo"].tap()
@@ -52,10 +52,17 @@ final class CahootsFlowUITests: XCTestCase {
             "short clip for the crew"
         )).firstMatch.exists)
         if app.buttons["workoutSession.skipCountdown"].waitForExistence(timeout: 2) {
+            waitUntilEnabled(app.buttons["workoutSession.skipCountdown"], timeout: 3)
             app.buttons["workoutSession.skipCountdown"].tap()
         }
+        // Skip countdown auto-starts capture; wait for stop (or fall back to manual record for retake).
         if app.buttons["workoutSession.stop"].waitForExistence(timeout: 3) {
             app.buttons["workoutSession.stop"].tap()
+        } else if app.buttons["workoutSession.record"].waitForExistence(timeout: 1) {
+            app.buttons["workoutSession.record"].tap()
+            if app.buttons["workoutSession.stop"].waitForExistence(timeout: 3) {
+                app.buttons["workoutSession.stop"].tap()
+            }
         }
         if app.staticTexts["Preview unavailable"].waitForExistence(timeout: 3) {
             XCTAssertTrue(app.staticTexts["Preview unavailable"].exists)
@@ -160,6 +167,7 @@ final class CahootsFlowUITests: XCTestCase {
         let app = launchDemo(additionalArguments: ["-stubWorkoutCapture"])
         app.buttons["today.logWorkout"].tap()
         XCTAssertTrue(app.buttons["workoutSession.skipCountdown"].waitForExistence(timeout: 3))
+        waitUntilEnabled(app.buttons["workoutSession.skipCountdown"], timeout: 3)
         app.buttons["workoutSession.skipCountdown"].tap()
         XCTAssertTrue(app.buttons["workoutSession.stop"].waitForExistence(timeout: 3))
         app.buttons["workoutSession.stop"].tap()
@@ -175,7 +183,7 @@ final class CahootsFlowUITests: XCTestCase {
     @MainActor
     func testOpenCrewStandingsAndChangeNotifications() throws {
         let app = launchDemo()
-        app.tabBars.buttons["Crew"].tap()
+        app.tabBars.buttons["Leaderboard"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["leaderboard.currentUser"].waitForExistence(timeout: 3))
         app.tabBars.buttons["You"].tap()
         let notifications = app.buttons["Notifications"]
@@ -198,7 +206,7 @@ final class CahootsFlowUITests: XCTestCase {
         app.tabBars.buttons["Crew"].tap()
         app.buttons["group.propose"].tap()
         XCTAssertTrue(app.navigationBars["New round"].waitForExistence(timeout: 2))
-        for _ in 0..<2 { app.buttons["builder.continue"].tap() }
+        for _ in 0..<3 { app.buttons["builder.continue"].tap() }
         XCTAssertTrue(app.buttons["builder.startNow"].waitForExistence(timeout: 3))
         app.buttons["builder.startNow"].tap()
         XCTAssertTrue(app.staticTexts["Crew"].waitForExistence(timeout: 3))
@@ -235,13 +243,11 @@ final class CahootsFlowUITests: XCTestCase {
         XCTAssertTrue(app.buttons["group.switcher"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["today.logWorkout"].isHittable)
 
-        app.tabBars.buttons["Crew"].tap()
-        for _ in 0..<6 where !app.descendants(matching: .any)["leaderboard.currentUser"].exists {
-            app.swipeUp()
-        }
+        app.tabBars.buttons["Leaderboard"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["leaderboard.currentUser"].waitForExistence(timeout: 3))
+        app.tabBars.buttons["Crew"].tap()
         for _ in 0..<6 where !app.buttons["group.openVote"].exists {
-            app.swipeDown()
+            app.swipeUp()
         }
         XCTAssertTrue(app.buttons["group.openVote"].waitForExistence(timeout: 3))
         app.buttons["group.openVote"].tap()
@@ -256,7 +262,7 @@ final class CahootsFlowUITests: XCTestCase {
     func testOnboardingActionsRemainReachableAtLargestAccessibilityText() throws {
         let app = XCUIApplication()
         app.launchEnvironment["UIPreferredContentSizeCategoryName"] = "UICTContentSizeCategoryAccessibilityXXXL"
-        app.launchArguments = ["-resetDemo", "-ephemeralData"]
+        app.launchArguments = ["-resetDemo", "-ephemeralData", "-skipSplash"]
         app.launch()
         XCTAssertTrue(app.buttons["onboarding.demo"].waitForExistence(timeout: 4))
         XCTAssertTrue(app.buttons["onboarding.demo"].isHittable)
@@ -303,8 +309,18 @@ final class CahootsFlowUITests: XCTestCase {
     @MainActor
     private func launch(reset: Bool) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = reset ? ["-resetDemo", "-ephemeralData"] : ["-ephemeralData"]
+        app.launchArguments = reset
+            ? ["-resetDemo", "-ephemeralData", "-skipSplash"]
+            : ["-ephemeralData", "-skipSplash"]
         app.launch()
         return app
+    }
+
+    @MainActor
+    private func waitUntilEnabled(_ element: XCUIElement, timeout: TimeInterval) {
+        let predicate = NSPredicate(format: "isEnabled == true")
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
+        let result = XCTWaiter.wait(for: [expectation], timeout: timeout)
+        XCTAssertEqual(result, .completed, "Expected \(element) to become enabled")
     }
 }

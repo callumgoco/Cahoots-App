@@ -9,6 +9,7 @@ struct RootView: View {
             AppBannerHost()
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .id(store.colorTheme.rawValue)
         }
         .task { await store.start() }
         .onChange(of: scenePhase) { _, phase in
@@ -50,7 +51,7 @@ struct RootView: View {
         } else {
             switch store.loadState {
             case .idle, .loading:
-                LoadingSkeleton().roundPage()
+                BrandLoadingView().roundPage()
             case .error(let message):
                 LoadRecoveryView(message: message)
             case .empty:
@@ -101,8 +102,12 @@ struct MainTabView: View {
         @Bindable var store = store
         TabView(selection: $store.selectedTab) {
             Tab("Today", systemImage: "circle.dotted.circle", value: 0) { TodayView() }
-            Tab("Crew", systemImage: "person.3.fill", value: 1) { GroupView() }
-            Tab("You", systemImage: "person.crop.circle", value: 2) { ProfileView() }
+            Tab("Crew", systemImage: "person.3.fill", value: 1) {
+                GroupView()
+            }
+            .badge(store.pendingVoteCount)
+            Tab("Leaderboard", systemImage: "trophy.fill", value: 2) { LeaderboardView() }
+            Tab("You", systemImage: "person.crop.circle", value: 3) { ProfileView() }
         }
         .tint(AppColors.accent)
     }

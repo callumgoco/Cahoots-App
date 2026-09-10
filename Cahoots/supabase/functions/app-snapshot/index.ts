@@ -1,6 +1,11 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, json } from "../_shared/cors.ts";
 
+// Column grants intentionally omit apple_subject_id; select("*") fails with
+// "permission denied for table profiles" for authenticated/anon roles.
+const PROFILE_COLUMNS =
+  "id, display_name, avatar_path, timezone_identifier, shows_exact_totals, created_at, updated_at, deleted_at, appearance_preference";
+
 const nowISO = () => new Date().toISOString();
 const iso = (value: string | null | undefined) => value ? new Date(value).toISOString() : null;
 const frequency = (value: string) => ({ selected_weekdays: "selectedWeekdays", times_per_week: "timesPerWeek" }[value] ?? value);
@@ -12,10 +17,24 @@ const activityEvent = (value: string) => ({
 const scoreEvent = (value: string) => ({ requirement_completed: "requirementCompleted" }[value] ?? value);
 const verification = (value: string) => ({ honour_system: "honourSystem" }[value] ?? value);
 
-function mapUser(row: Record<string, unknown>, opts?: { includeAppleSubject?: boolean }) {
+/** Encode a Postgres `date` as start-of-day in the challenge timezone (matches client ScheduleEngine). */
+function calendarDateInTimeZoneISO(dateYYYYMMDD: string, timeZone: string): string {
+  try {
+    // Temporal is available on Deno Deploy; produces the same instant the iOS client writes locally.
+    const zoned = (Temporal as unknown as {
+      ZonedDateTime: { from: (input: string) => { toInstant: () => { toString: () => string } } };
+    }).ZonedDateTime.from(`${dateYYYYMMDD}T00:00:00[${timeZone}]`);
+    return zoned.toInstant().toString().replace(/\+00:00$/, "Z");
+  } catch {
+    // Noon UTC keeps the calendar date stable across common zones if Temporal is unavailable.
+    return new Date(`${dateYYYYMMDD}T12:00:00.000Z`).toISOString();
+  }
+}
+
+function mapUser(row: Record<string, unknown>) {
   return {
     id: row.id,
-    appleSubjectID: opts?.includeAppleSubject ? (row.apple_subject_id ?? null) : null,
+    appleSubjectID: null,
     displayName: row.display_name, avatarPath: row.avatar_path ?? null,
     timezoneIdentifier: row.timezone_identifier,
     createdAt: iso(row.created_at as string), updatedAt: iso(row.updated_at as string),
@@ -45,14 +64,19 @@ Deno.serve(async (request) => {
 
   const { error: limitError } = await client.rpc("consume_rate_limit", {
     action_input: "app_snapshot",
-    max_hits: 60,
-    window_seconds: 60,
   });
   if (limitError) return json({ message: "rate_limited" }, 429);
 
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (serviceKey) {
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey);
+    // Align DB challenge status with client reconcile before reading the snapshot.
+    await admin.rpc("activate_due_challenges");
+  }
+
   const userID = authData.user.id;
   const [profileResult, ownMembershipsResult, preferenceRowsResult] = await Promise.all([
-    client.from("profiles").select("*").eq("id", userID).single(),
+    client.from("profiles").select(PROFILE_COLUMNS).eq("id", userID).single(),
     client.from("group_memberships").select("*").eq("user_id", userID).eq("status", "active"),
     client.from("notification_preferences").select("*").eq("user_id", userID),
   ]);
@@ -79,7 +103,7 @@ Deno.serve(async (request) => {
   const challengeIDs = (challengesResult.data ?? []).map((row) => row.id);
   const peerIDs = [...new Set((membershipsResult.data ?? []).map((row) => row.user_id))];
   const [usersResult, eligibilityResult, votesResult, submissionsResult, scoreResult, recoveryResult, reportsResult, blocksResult, clipsResult] = await Promise.all([
-    peerIDs.length ? client.from("profiles").select("*").in("id", peerIDs) : client.from("profiles").select("*").limit(0),
+    peerIDs.length ? client.from("profiles").select(PROFILE_COLUMNS).in("id", peerIDs) : client.from("profiles").select(PROFILE_COLUMNS).limit(0),
     proposalIDs.length ? client.from("proposal_eligible_voters").select("*").in("proposal_id", proposalIDs) : client.from("proposal_eligible_voters").select("*").limit(0),
     proposalIDs.length ? client.from("votes").select("*").in("proposal_id", proposalIDs) : client.from("votes").select("*").limit(0),
     challengeIDs.length ? client.from("submissions").select("*").in("challenge_id", challengeIDs) : client.from("submissions").select("*").limit(0),
@@ -104,6 +128,7 @@ Deno.serve(async (request) => {
     recoveryDayAllowance: row.recovery_day_allowance, status: row.status,
     scoringVersion: row.scoring_version, createdAt: iso(row.created_at),
   }));
+  const challengeTimezoneByID = new Map(challenges.map((challenge) => [challenge.id as string, challenge.challengeTimezone as string]));
   const scoreRows = scoreResult.data ?? [];
   const submissionRows = submissionsResult.data ?? [];
   const clipRows = clipsResult.data ?? [];
@@ -178,7 +203,7 @@ Deno.serve(async (request) => {
   const preferenceRows = preferenceRowsResult.data ?? [];
   const globalPref = preferenceRows.find((row) => row.group_id == null) ?? {
     id: crypto.randomUUID(), user_id: userID, group_id: null,
-    personal_reminders_enabled: true, friend_activity_mode: "digest", challenge_updates_enabled: true,
+    personal_reminders_enabled: true, friend_activity_mode: "immediate", challenge_updates_enabled: true,
     quiet_hours_start: 1320, quiet_hours_end: 420, reminder_minutes: 1080,
     primer_dismissed: false, default_reminder_minutes: 1080,
   };
@@ -193,14 +218,14 @@ Deno.serve(async (request) => {
       : groupIDs.map((id) => ({
         group_id: id,
         personal_reminders_enabled: true,
-        friend_activity_mode: "digest",
+        friend_activity_mode: "immediate",
         challenge_updates_enabled: true,
         reminder_minutes: null,
       }))
     ).map((row) => ({
       groupID: row.group_id,
       personalRemindersEnabled: row.personal_reminders_enabled ?? true,
-      friendActivityMode: row.friend_activity_mode ?? "digest",
+      friendActivityMode: row.friend_activity_mode ?? "immediate",
       challengeUpdatesEnabled: row.challenge_updates_enabled ?? true,
       reminderMinutes: row.reminder_minutes ?? null,
     })),
@@ -274,7 +299,7 @@ Deno.serve(async (request) => {
 
   return json({
     schemaVersion: 3,
-    currentUser: mapUser(profileResult.data, { includeAppleSubject: true }), users,
+    currentUser: mapUser(profileResult.data), users,
     groups: (groupsResult.data ?? []).map((row) => ({ id: row.id, name: row.name, emoji: row.emoji, ownerID: row.owner_id, memberLimit: row.member_limit, createdAt: iso(row.created_at), updatedAt: iso(row.updated_at), archivedAt: iso(row.archived_at) })),
     memberships: (membershipsResult.data ?? []).map((row) => ({ id: row.id, groupID: row.group_id, userID: row.user_id, role: row.role, status: row.status, joinedAt: iso(row.joined_at), leftAt: iso(row.left_at), notificationLevel: row.notification_level })),
     invites: (invitesResult.data ?? []).map((row) => ({ id: row.id, groupID: row.group_id, code: row.code, createdBy: row.created_by, expiresAt: iso(row.expires_at), maximumUses: row.maximum_uses, useCount: row.use_count, revokedAt: iso(row.revoked_at) })),
@@ -302,9 +327,10 @@ Deno.serve(async (request) => {
           remotePath: reveal ? clip.storage_path : null,
           createdAt: iso(clip.created_at),
         }));
+      const timezone = challengeTimezoneByID.get(row.challenge_id) ?? "UTC";
       return {
         id: row.id, clientGeneratedID: row.client_generated_id, challengeID: row.challenge_id, userID: row.user_id,
-        requirementDate: new Date(`${row.requirement_date}T00:00:00Z`).toISOString(),
+        requirementDate: calendarDateInTimeZoneISO(row.requirement_date, timezone),
         quantity: reveal ? Number(row.quantity) : 0,
         measurementType: row.measurement_type,
         completedAt: iso(row.completed_at), submittedAt: iso(row.submitted_at), syncState: row.sync_state,
@@ -318,7 +344,14 @@ Deno.serve(async (request) => {
     notificationPreference: { id: globalPref.id, userID: globalPref.user_id, groupID: globalPref.group_id, personalRemindersEnabled: globalPref.personal_reminders_enabled, friendActivityMode: globalPref.friend_activity_mode, challengeUpdatesEnabled: globalPref.challenge_updates_enabled, quietHoursStart: globalPref.quiet_hours_start, quietHoursEnd: globalPref.quiet_hours_end, reminderMinutes: globalPref.reminder_minutes },
     notificationSettings,
     pendingOperations: submissionRows.filter((row) => row.sync_state === "waiting" && row.user_id === userID).map((row) => ({ id: crypto.randomUUID(), clientGeneratedID: row.client_generated_id, kind: "submission", retryCount: 0, nextRetryAt: nowISO(), createdAt: iso(row.created_at), lastError: null })),
-    recoveryDays: recoveryRows.map((row) => ({ id: row.id, challengeID: row.challenge_id, userID: row.user_id, requirementDate: new Date(`${row.requirement_date}T00:00:00Z`).toISOString(), createdAt: iso(row.created_at) })),
+    recoveryDays: recoveryRows.map((row) => {
+      const timezone = challengeTimezoneByID.get(row.challenge_id) ?? "UTC";
+      return {
+        id: row.id, challengeID: row.challenge_id, userID: row.user_id,
+        requirementDate: calendarDateInTimeZoneISO(row.requirement_date, timezone),
+        createdAt: iso(row.created_at),
+      };
+    }),
     previousRound,
     roundResults,
     appearance,

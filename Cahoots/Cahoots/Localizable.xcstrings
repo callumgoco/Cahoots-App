@@ -1,7 +1,16 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "" : {
+
+    },
     "—" : {
+
+    },
+    ", +%lld more" : {
+
+    },
+    "#%lld" : {
 
     },
     "%@" : {
@@ -17,6 +26,16 @@
         }
       }
     },
+    "%@ · %lld days. Check-ins open when the round begins." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$lld days. Check-ins open when the round begins."
+          }
+        }
+      }
+    },
     "%@ %@" : {
       "localizations" : {
         "en" : {
@@ -27,8 +46,37 @@
         }
       }
     },
+    "%@ and %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ and %2$@"
+          }
+        }
+      }
+    },
+    "%@ begins today. Open Today to get ready." : {
+
+    },
+    "%@ complete" : {
+
+    },
+    "%@ has started. Check in on Today when you’re ready." : {
+
+    },
     "%@ is ready." : {
 
+    },
+    "%@ is scheduled to start %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ is scheduled to start %2$@."
+          }
+        }
+      }
     },
     "%@ just posted in %@." : {
       "localizations" : {
@@ -39,6 +87,12 @@
           }
         }
       }
+    },
+    "%@ opened a group vote. Review it before it closes." : {
+
+    },
+    "%@ posted — log yours to see it." : {
+
     },
     "%@ posted in %@ — log yours to see it." : {
       "localizations" : {
@@ -66,6 +120,36 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
+    "%@, and %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, and %2$@"
+          }
+        }
+      }
+    },
+    "%@. %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@. %2$@"
+          }
+        }
+      }
+    },
+    "%@. Target %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@. Target %2$@"
           }
         }
       }
@@ -125,6 +209,16 @@
     "%lld min" : {
 
     },
+    "%lld of %lld done · %@ still need to." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld done · %3$@ still need to."
+          }
+        }
+      }
+    },
     "%lld of %lld voted" : {
       "localizations" : {
         "en" : {
@@ -135,10 +229,26 @@
         }
       }
     },
-    "%lld percent complete" : {
-
+    "%lld of %lld voted · %@ still need to." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld voted · %3$@ still need to."
+          }
+        }
+      }
     },
     "%lld points earned" : {
+
+    },
+    "%lld pts" : {
+
+    },
+    "%lld pts ahead" : {
+
+    },
+    "%lld pts behind" : {
 
     },
     "%lld recovery %@" : {
@@ -157,23 +267,26 @@
     "%lld seconds" : {
 
     },
-    "%lld-day streak · Rank %@ · %@" : {
+    "%lld-day streak" : {
+
+    },
+    "%lld-day streak · %@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "%1$lld-day streak · Rank %2$@ · %3$@"
+            "value" : "%1$lld-day streak · %2$@"
           }
         }
       }
-    },
-    "%lld%%" : {
-
     },
     "+%lld" : {
 
     },
     "+%lld points if you finish" : {
+
+    },
+    "+1 for today’s check-in" : {
 
     },
     "✓ %@ %@" : {
@@ -192,13 +305,28 @@
     "1 recovery day" : {
 
     },
+    "3 workouts this week" : {
+
+    },
+    "4 friends" : {
+
+    },
+    "4/4 agreed" : {
+
+    },
     "A check-in is still open" : {
+
+    },
+    "A group vote is open" : {
 
     },
     "A new invitation is ready." : {
 
     },
     "A scheduled requirement is ready when you are." : {
+
+    },
+    "A scheduled round begins today. Open Today to get ready." : {
 
     },
     "A short clip for the crew. You enter the number — this round is honour system." : {
@@ -213,16 +341,10 @@
     "A useful nudge, on your terms" : {
 
     },
-    "A vote is already open" : {
-
-    },
     "ABC123" : {
 
     },
     "Accept" : {
-
-    },
-    "Active members" : {
 
     },
     "Activity" : {
@@ -237,7 +359,16 @@
     "Admin changed to member." : {
 
     },
+    "All members will lose access. Rounds, votes, and activity for this group will be permanently removed." : {
+
+    },
+    "All-time · %@ %@" : {
+
+    },
     "Allow reminders" : {
+
+    },
+    "Already have an account?" : {
 
     },
     "Already have an account? Sign in" : {
@@ -276,16 +407,49 @@
     "Blocked members" : {
 
     },
+    "Cahoots" : {
+
+    },
+    "Cahoots can remind you about scheduled check-ins and votes. No workout quantities appear on your lock screen." : {
+
+    },
+    "Cahoots couldn’t save your latest notification changes. Keep editing to try again." : {
+
+    },
+    "Cahoots groups are private and invite-only. Create one for friends or join with a six-character code." : {
+
+    },
+    "Cahoots never includes detailed workout quantities in lock-screen notifications." : {
+
+    },
     "Camera access is required to log a workout and unlock the crew feed." : {
 
     },
     "Camera preview (stub)" : {
 
     },
+    "Camera preview unavailable. Using stub camera." : {
+
+    },
     "Camera required" : {
 
     },
+    "Camera unavailable. %@" : {
+
+    },
     "Cancel" : {
+
+    },
+    "Challenge details" : {
+
+    },
+    "Challenge results" : {
+
+    },
+    "Challenge title" : {
+
+    },
+    "Check in to reveal" : {
 
     },
     "Check that the quantity and unit are correct. Bonus points remain capped at 10." : {
@@ -297,13 +461,16 @@
     "Check your email for a reset link." : {
 
     },
+    "Check-in rules" : {
+
+    },
     "Check-in wasn’t accepted" : {
 
     },
     "Check-ins will appear here once this round begins." : {
 
     },
-    "Choose a clear goal" : {
+    "Choices stay hidden until you vote." : {
 
     },
     "Choose a name people will recognise. Groups stay private." : {
@@ -315,6 +482,12 @@
     "Choose a valid name and a member limit no lower than the current member count." : {
 
     },
+    "Choose a workout" : {
+
+    },
+    "Clip unavailable" : {
+
+    },
     "Clips must be at least 2 seconds." : {
 
     },
@@ -324,12 +497,12 @@
     "Close this draft?" : {
 
     },
-    "Closes %@ · %@" : {
+    "Closes %@ (%@)" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Closes %1$@ · %2$@"
+            "value" : "Closes %1$@ (%2$@)"
           }
         }
       }
@@ -374,7 +547,7 @@
     "Continue" : {
 
     },
-    "Control" : {
+    "Continue with email" : {
 
     },
     "Copied" : {
@@ -383,16 +556,16 @@
     "Copy code" : {
 
     },
+    "Couldn’t reach the crew yet. Tap Retry." : {
+
+    },
     "Couldn’t save changes" : {
 
     },
+    "Countdown %lld" : {
+
+    },
     "Create a group" : {
-
-    },
-    "Create a private group, pick a daily check-in, and keep each other honest." : {
-
-    },
-    "Create account with email" : {
 
     },
     "Create group" : {
@@ -404,6 +577,9 @@
     "Crew" : {
 
     },
+    "Crew check-ins" : {
+
+    },
     "Crew posted · hidden until you go" : {
 
     },
@@ -413,8 +589,15 @@
     "Crew today" : {
 
     },
-    "Customize" : {
-
+    "Daily check-in closes %@ · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Daily check-in closes %1$@ · %2$@"
+          }
+        }
+      }
     },
     "Daily check-in deadline · %@" : {
 
@@ -428,29 +611,28 @@
     "Daily target" : {
 
     },
-    "Default reminder" : {
+    "Day %lld of %lld" : {
 
     },
-    "Defaults: closes %@, %@, %lld recovery day%@." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Defaults: closes %1$@, %2$@, %3$lld recovery day%4$@."
-          }
-        }
-      }
-    },
     "Delete account" : {
+
+    },
+    "Delete group" : {
+
+    },
+    "Delete this group?" : {
 
     },
     "Delete your account?" : {
 
     },
+    "Deletes this group for everyone, including rounds and activity. This cannot be undone." : {
+
+    },
     "Demo data" : {
 
     },
-    "Did not pass · duplicate and edit" : {
+    "Did not pass · Duplicate or start a new round" : {
 
     },
     "Discard draft" : {
@@ -465,13 +647,22 @@
     "Display name" : {
 
     },
+    "done" : {
+
+    },
     "Done" : {
 
     },
     "Duplicate and edit" : {
 
     },
+    "Duplicate and edit for another vote, or start a fresh round. You can also invite more friends first." : {
+
+    },
     "Edit name" : {
+
+    },
+    "Ember" : {
 
     },
     "Emoji" : {
@@ -504,6 +695,15 @@
     "Every member’s consistency helped finish the round." : {
 
     },
+    "Everyone else is in." : {
+
+    },
+    "Everyone has voted." : {
+
+    },
+    "Everyone’s in for today." : {
+
+    },
     "Expires" : {
 
     },
@@ -512,6 +712,16 @@
     },
     "Explore the demo" : {
 
+    },
+    "Feature %lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Feature %1$lld of %2$lld"
+          }
+        }
+      }
     },
     "Film your set" : {
 
@@ -537,7 +747,7 @@
     "Friendly accountability" : {
 
     },
-    "Friends see who posted and when. Quantities, points, and clips stay hidden until you check in, use a recovery day, or the daily deadline passes. Clips are kept for up to seven days or until the round ends." : {
+    "Friends see who posted and when. Quantities, points, and clips stay hidden until you check in, use a recovery day, or the daily deadline passes. Clips are kept until about two days after that day’s deadline, until you check in on a newer day, or until the round ends." : {
 
     },
     "Generate a new invitation?" : {
@@ -549,19 +759,16 @@
     "Generate new invitation" : {
 
     },
-    "Group" : {
+    "Getting your crew ready" : {
 
     },
     "Group actions" : {
 
     },
-    "Group identity" : {
+    "Group deleted." : {
 
     },
     "Group name" : {
-
-    },
-    "Group options" : {
 
     },
     "Group settings" : {
@@ -573,22 +780,28 @@
     "Group vote" : {
 
     },
+    "Grove" : {
+
+    },
     "Guidelines" : {
 
     },
     "Hidden" : {
 
     },
-    "Hide customize" : {
-
-    },
     "Hide password" : {
 
     },
-    "Immediate" : {
+    "How far?" : {
 
     },
-    "Invitation" : {
+    "How long?" : {
+
+    },
+    "How many reps?" : {
+
+    },
+    "Immediate" : {
 
     },
     "Invitation from %@" : {
@@ -607,6 +820,9 @@
 
     },
     "Invite friends to %@" : {
+
+    },
+    "Invite your crew" : {
 
     },
     "Invite-only groups" : {
@@ -638,6 +854,9 @@
 
     },
     "Keep editing" : {
+
+    },
+    "Leaderboard" : {
 
     },
     "Leaderboard period" : {
@@ -697,6 +916,9 @@
     "Members record their own check-ins. Recovery protects a streak and awards no points." : {
 
     },
+    "Mint" : {
+
+    },
     "missed" : {
 
     },
@@ -725,7 +947,7 @@
     "New round" : {
 
     },
-    "No account or external services required" : {
+    "No account needed" : {
 
     },
     "No active invitation" : {
@@ -735,6 +957,9 @@
 
     },
     "No blocked members" : {
+
+    },
+    "No clip available for %@." : {
 
     },
     "No group activity yet" : {
@@ -747,6 +972,12 @@
 
     },
     "No rank change" : {
+
+    },
+    "No recovery days remain for this round." : {
+
+    },
+    "No standings yet" : {
 
     },
     "Not now" : {
@@ -782,6 +1013,12 @@
     "Offline. Check-ins will wait to sync." : {
 
     },
+    "OK" : {
+
+    },
+    "Only the group owner can delete this group." : {
+
+    },
     "Open crew" : {
 
     },
@@ -792,9 +1029,6 @@
 
     },
     "Open Settings" : {
-
-    },
-    "Optional details" : {
 
     },
     "Or enter a custom emoji" : {
@@ -809,9 +1043,6 @@
     "Ownership transferred." : {
 
     },
-    "Password" : {
-
-    },
     "Password meets the 6 character minimum" : {
 
     },
@@ -821,7 +1052,19 @@
     "Paste an invite link or type the six-character code from a group member." : {
 
     },
+    "pending" : {
+
+    },
     "People you block will appear here." : {
+
+    },
+    "Play" : {
+
+    },
+    "Play %@’s clip" : {
+
+    },
+    "Play clip" : {
 
     },
     "points" : {
@@ -839,7 +1082,7 @@
     "Privacy" : {
 
     },
-    "Private by default" : {
+    "Private" : {
 
     },
     "Private group workout clips only" : {
@@ -851,13 +1094,13 @@
     "Progress ready for another check-in" : {
 
     },
+    "Proof clip" : {
+
+    },
     "Proposal did not pass" : {
 
     },
     "Proposal unavailable" : {
-
-    },
-    "Propose a round" : {
 
     },
     "Proposed by %@" : {
@@ -869,7 +1112,7 @@
     "QR code unavailable" : {
 
     },
-    "Quiet hours" : {
+    "Rank %@" : {
 
     },
     "Rank %lld, %@, %lld points" : {
@@ -892,6 +1135,9 @@
         }
       }
     },
+    "Ready for another try" : {
+
+    },
     "Ready to go" : {
 
     },
@@ -911,6 +1157,9 @@
 
     },
     "Record your finish clip for the crew. You enter the amount — this round is honour system." : {
+
+    },
+    "Recording" : {
 
     },
     "recovery day" : {
@@ -958,9 +1207,6 @@
     "Resetting is explicit. Cahoots does not replace unreadable saved data automatically." : {
 
     },
-    "Rest" : {
-
-    },
     "rest day" : {
 
     },
@@ -970,10 +1216,10 @@
     "Retry" : {
 
     },
-    "Retry when you have a stable connection." : {
+    "Review amount" : {
 
     },
-    "Review amount" : {
+    "Review last vote" : {
 
     },
     "Review the group proposal before voting closes." : {
@@ -988,34 +1234,7 @@
     "Revoke this invitation?" : {
 
     },
-    "Cahoots can remind you about scheduled check-ins and votes. No workout quantities appear on your lock screen." : {
-
-    },
-    "Cahoots couldn’t save your latest notification changes. Keep editing to try again." : {
-
-    },
-    "Challenge details" : {
-
-    },
-    "Cahoots groups are private and invite-only. Create one for friends or join with a six-character code." : {
-
-    },
-    "Cahoots never includes detailed workout quantities in lock-screen notifications." : {
-
-    },
-    "Challenge results" : {
-
-    },
-    "Challenge scheduled" : {
-
-    },
-    "Challenge starts soon" : {
-
-    },
-    "Challenge title" : {
-
-    },
-    "Cahoots updates" : {
+    "Round just started — first check-in takes the lead." : {
 
     },
     "Save" : {
@@ -1036,6 +1255,9 @@
     "Schedule" : {
 
     },
+    "Scheduled" : {
+
+    },
     "Scheduled reminders" : {
 
     },
@@ -1045,16 +1267,22 @@
     "Selected days" : {
 
     },
-    "Set a goal for this crew to vote on or begin." : {
+    "Setting up camera" : {
 
     },
-    "Set one goal with friends" : {
+    "Setting up camera…" : {
 
     },
     "Share" : {
 
     },
     "Show password" : {
+
+    },
+    "Shows briefly on first launch" : {
+
+    },
+    "Sign in" : {
 
     },
     "Sign in again" : {
@@ -1078,16 +1306,25 @@
     "Skip countdown" : {
 
     },
+    "Sky" : {
+
+    },
     "Start" : {
 
     },
     "START" : {
 
     },
+    "Start a new round" : {
+
+    },
     "Start a round" : {
 
     },
     "Start a round with your crew and check in here each day." : {
+
+    },
+    "Start a round with your crew and standings will show up here." : {
 
     },
     "Start another round" : {
@@ -1102,25 +1339,59 @@
     "Start now" : {
 
     },
-    "Start now schedules the round immediately. Put to vote opens a 48-hour group vote that needs a strict majority." : {
+    "Start now schedules the round immediately. Put to vote opens a 48-hour group vote (closes %@) that needs a strict majority." : {
+
+    },
+    "Start now schedules the round immediately. Voting needs at least 2 crew members — invite friends from Crew, then put a round to vote." : {
+
+    },
+    "Start now solo" : {
+
+    },
+    "Start recording" : {
 
     },
     "Starts" : {
 
     },
-    "Starts %@" : {
+    "Starts %@ (%@)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Starts %1$@ (%2$@)"
+          }
+        }
+      }
+    },
+    "Starts today · %@" : {
 
     },
-    "Step %lld of 3" : {
+    "Starts tomorrow · %@" : {
+
+    },
+    "Step %lld of %lld" : {
+
+    },
+    "Still need to vote" : {
+
+    },
+    "Still need to: %@." : {
 
     },
     "Stop recording" : {
+
+    },
+    "Studio" : {
 
     },
     "Submit" : {
 
     },
     "Submit anyway" : {
+
+    },
+    "Sunday Crew" : {
 
     },
     "Switch crew" : {
@@ -1132,13 +1403,19 @@
     "Synced" : {
 
     },
+    "Syncing to your crew now…" : {
+
+    },
+    "Tap to record" : {
+
+    },
     "Target" : {
 
     },
     "Target · %@" : {
 
     },
-    "That Cahoots invitation link is not valid." : {
+    "That Cahoots link is not valid." : {
 
     },
     "That’s much higher than the target" : {
@@ -1147,7 +1424,20 @@
     "The camera is unavailable right now." : {
 
     },
-    "The group agreed. The round will start on the proposed date." : {
+    "The crew accepted %@. It starts %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The crew accepted %1$@. It starts %2$@."
+          }
+        }
+      }
+    },
+    "The crew accepted %@. The round is live." : {
+
+    },
+    "The last proposal didn’t pass. Duplicate it, or start a fresh round whenever you’re ready." : {
 
     },
     "The next round must start after %@ ends." : {
@@ -1156,10 +1446,19 @@
     "The previous code and QR link will stop working immediately." : {
 
     },
-    "The proposal can be duplicated and edited for another vote." : {
+    "the rest are in cahoots" : {
 
     },
     "Their activity will be hidden. You can unblock them later in Safety & privacy." : {
+
+    },
+    "Theme" : {
+
+    },
+    "There is no active challenge to recover." : {
+
+    },
+    "There is no open vote right now." : {
 
     },
     "There is still time to check in today." : {
@@ -1177,13 +1476,28 @@
     "This group already has its next round scheduled." : {
 
     },
+    "This proposal is not open for voting." : {
+
+    },
     "This protects your streak and awards no points. You have %lld remaining." : {
+
+    },
+    "This round" : {
+
+    },
+    "This round has ended." : {
 
     },
     "This round is no longer available." : {
 
     },
     "This starts permanent deletion of your profile and private group data. This cannot be undone." : {
+
+    },
+    "Tide" : {
+
+    },
+    "Tied" : {
 
     },
     "Time left" : {
@@ -1201,13 +1515,19 @@
     "Today" : {
 
     },
+    "Today is not a scheduled requirement day." : {
+
+    },
     "Today’s amount" : {
+
+    },
+    "Today’s challenge closes soon" : {
 
     },
     "Today’s check-in window is closed." : {
 
     },
-    "Today’s challenge closes soon" : {
+    "Today’s crew" : {
 
     },
     "Transfer ownership" : {
@@ -1220,6 +1540,9 @@
 
     },
     "Try again" : {
+
+    },
+    "Try another round" : {
 
     },
     "Unblock" : {
@@ -1249,10 +1572,19 @@
     "View open vote" : {
 
     },
-    "Vote hidden" : {
+    "Volt" : {
 
     },
     "Vote now" : {
+
+    },
+    "Vote opened, vote closing soon, and round starting alerts for this crew." : {
+
+    },
+    "Voted" : {
+
+    },
+    "Votes & round updates" : {
 
     },
     "Voting closed" : {
@@ -1261,7 +1593,19 @@
     "Voting closes soon" : {
 
     },
-    "Voting ends %@" : {
+    "Voting has closed for this proposal." : {
+
+    },
+    "Voting needs at least 2 crew members. Start now, or invite friends from Crew." : {
+
+    },
+    "vs" : {
+
+    },
+    "Waiting on %@." : {
+
+    },
+    "Welcome aboard — this crew has an open vote." : {
 
     },
     "What happened?" : {
@@ -1270,19 +1614,40 @@
     "When do you check in?" : {
 
     },
+    "When someone posts a check-in. Separate from votes and round updates." : {
+
+    },
     "won %@" : {
 
     },
-    "Workout privacy" : {
+    "Workout complete" : {
 
     },
     "You" : {
+
+    },
+    "YOU" : {
+
+    },
+    "You already used a recovery day today." : {
+
+    },
+    "You and %lld others still need to check in." : {
+
+    },
+    "You and 1 other still need to check in." : {
+
+    },
+    "You are not eligible to vote on this proposal." : {
 
     },
     "You can check in again on the next scheduled day." : {
 
     },
     "You can leave groups, mute friend activity, block or report members, and delete your account." : {
+
+    },
+    "You checked in" : {
 
     },
     "You do not have permission to remove this member." : {
@@ -1303,7 +1668,10 @@
     "You’re first today." : {
 
     },
-    "you@example.com" : {
+    "You’re the only member so far. Invite friends, then start a round together — or begin solo with Start now." : {
+
+    },
+    "Your Cahoots check-in" : {
 
     },
     "Your check-in could not be saved. Nothing was added, so please try again." : {
@@ -1315,6 +1683,12 @@
     "Your clip is saved. You can still use it for this check-in." : {
 
     },
+    "Your crew has enough people to vote. Start a round whenever you’re ready." : {
+
+    },
+    "Your crew needs your vote before the proposal closes." : {
+
+    },
     "Your draft can be resumed for this group later." : {
 
     },
@@ -1324,10 +1698,10 @@
     "Your name" : {
 
     },
-    "Your position" : {
+    "Your next round starts soon" : {
 
     },
-    "Your Cahoots check-in" : {
+    "Your position" : {
 
     },
     "Your scheduled check-in window closes in 30 minutes." : {
@@ -1340,12 +1714,6 @@
 
     },
     "Your streak is protected. No points are awarded." : {
-
-    },
-    "Your workout is saved and will update when you’re back online." : {
-
-    },
-    "Your workout will update automatically." : {
 
     }
   },

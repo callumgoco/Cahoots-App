@@ -19,8 +19,6 @@ Deno.serve(async (request) => {
 
     const { error: limitError } = await client.rpc("consume_rate_limit", {
       action_input: "clip_download_url",
-      max_hits: 60,
-      window_seconds: 60,
     });
     if (limitError) return json({ message: "rate_limited" }, 429);
 

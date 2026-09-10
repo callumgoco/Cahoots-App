@@ -15,6 +15,8 @@ struct TodayView: View {
     @State private var showCheckIn = ProcessInfo.processInfo.arguments.contains("-showCheckIn")
     @State private var confirmRecovery = false
     @State private var showBuilder = false
+    @State private var clipUnlockHint: String?
+    @State private var railPlaybackClip: WorkoutClip?
 
     var body: some View {
         NavigationStack {
@@ -30,12 +32,24 @@ struct TodayView: View {
                     if let challenge = store.currentChallenge {
                         posterCard(challenge)
                         WeekStrip(tokens: weekTokens(for: challenge))
+                        CrewTodayStatusRail(
+                            entries: store.todayMemberStatuses,
+                            accessibilityID: "today.crewStrip",
+                            onSelectMember: handleCrewMemberTap
+                        )
+                        if let clipUnlockHint {
+                            Text(clipUnlockHint)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(AppColors.secondaryInk)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .accessibilityIdentifier("today.clipUnlockHint")
+                        }
                         captionRow(challenge)
                         if state(for: challenge) == .scheduledIncomplete {
                             checkInBar
                         }
+                        revealedPeerDetailStrip
                         pendingSyncCard
-                        rejectedSyncCard
                     } else {
                         emptyChallengeState
                     }
@@ -47,15 +61,16 @@ struct TodayView: View {
             .navigationTitle("Today")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $showCheckIn, onDismiss: {
+            .fullScreenCover(isPresented: $showCheckIn, onDismiss: {
                 store.consumePendingWorkoutSession()
             }) {
                 WorkoutSessionView()
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
                     .interactiveDismissDisabled(store.showCompletion)
             }
             .sheet(isPresented: $showBuilder) { ChallengeBuilderView() }
+            .background {
+                PeerClipPlaybackPresenter(clip: $railPlaybackClip)
+            }
             .onChange(of: store.presentWorkoutSession) { _, shouldPresent in
                 if shouldPresent { showCheckIn = true }
             }
@@ -71,37 +86,55 @@ struct TodayView: View {
     }
 
     private var emptyChallengeState: some View {
-        VStack(spacing: AppSpacing.large) {
-            Image(systemName: "calendar.badge.plus")
+        let memberCount = store.groupMembers.count
+        let hasFailed = store.latestFailedProposal != nil
+        return VStack(spacing: AppSpacing.large) {
+            Image(systemName: memberCount < 2 ? "person.badge.plus" : "calendar.badge.plus")
                 .font(.system(size: 48, weight: .semibold))
+                .foregroundStyle(AppColors.ink)
                 .frame(width: 96, height: 96)
+                .environment(\.colorScheme, .dark)
                 .background(AppColors.card, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
             VStack(spacing: AppSpacing.small) {
-                Text("No active round")
+                Text(CrewEdgeCopy.emptyTodayTitle(memberCount: memberCount, hasFailedProposal: hasFailed))
                     .font(.title.bold())
                     .multilineTextAlignment(.center)
-                Text("Start a round with your crew and check in here each day.")
+                Text(CrewEdgeCopy.emptyTodayMessage(memberCount: memberCount, hasFailedProposal: hasFailed))
                     .foregroundStyle(AppColors.secondaryInk)
                     .multilineTextAlignment(.center)
             }
             if store.currentProposal != nil {
-                Button("View open vote") { store.selectedTab = 1 }
+                Button("View open vote") { store.presentVote() }
                     .buttonStyle(PrimaryButtonStyle())
                     .accessibilityIdentifier("today.openVote")
+            } else if hasFailed, canPropose {
+                Button("Try another round") { showBuilder = true }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .accessibilityIdentifier("today.retryRound")
+                if let failed = store.latestFailedProposal {
+                    Button("Review last vote") {
+                        store.presentVote(groupID: failed.groupID, proposalID: failed.id)
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .accessibilityIdentifier("today.reviewFailedVote")
+                }
+            } else if memberCount < 2 {
+                Button("Invite friends") { store.presentInviteFlow() }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .accessibilityIdentifier("today.inviteFriends")
+                if canPropose {
+                    Button("Start now solo") { showBuilder = true }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .accessibilityIdentifier("today.startChallenge")
+                }
             } else if canPropose {
                 Button("Start a round") { showBuilder = true }
                     .buttonStyle(PrimaryButtonStyle())
                     .accessibilityIdentifier("today.startChallenge")
             }
-            if canPropose || store.currentProposal != nil {
-                Button("Open crew") { store.selectedTab = 1 }
-                    .buttonStyle(SecondaryButtonStyle())
-                    .accessibilityIdentifier("today.openCrew")
-            } else {
-                Button("Open crew") { store.selectedTab = 1 }
-                    .buttonStyle(PrimaryButtonStyle())
-                    .accessibilityIdentifier("today.openCrew")
-            }
+            Button("Open crew") { store.selectedTab = 1 }
+                .buttonStyle(SecondaryButtonStyle())
+                .accessibilityIdentifier("today.openCrew")
         }
         .padding(AppSpacing.extraLarge)
         .frame(maxWidth: .infinity)
@@ -118,7 +151,7 @@ struct TodayView: View {
         return CahootsCard(elevated: true) {
             VStack(alignment: .leading, spacing: AppSpacing.large) {
                 HStack {
-                    StatusPill(text: statusText(requirementState), kind: statusKind(requirementState))
+                    StatusPill(text: statusText(requirementState, challenge: challenge), kind: statusKind(requirementState))
                     Spacer()
                     if store.todaySubmission.map({ $0.syncState == .waiting || $0.syncState == .failed }) == true {
                         StatusPill(text: FriendFacingCopy.savedOnPhone, kind: .warning)
@@ -128,12 +161,14 @@ struct TodayView: View {
                 switch requirementState {
                 case .scheduledIncomplete:
                     heroDeadlineCountdown(challenge)
-                    Text(challenge.activityType)
-                        .font(.title3.bold())
-                    Text("Target · \(challenge.quantityLabel)")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(AppColors.secondaryInk)
-                    crewPostedStrip
+                    VStack(alignment: .leading, spacing: AppSpacing.micro) {
+                        Text(challenge.activityType)
+                            .font(.title2.bold())
+                        Text("Target · \(challenge.quantityLabel)")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(AppColors.secondaryInk)
+                    }
+                    rejectionStrip
 
                 case .complete:
                     HStack(alignment: .firstTextBaseline, spacing: AppSpacing.small) {
@@ -154,7 +189,6 @@ struct TodayView: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(AppColors.secondaryInk)
                     }
-                    crewPostedStrip
 
                 case .restDay:
                     Label("Nothing scheduled today", systemImage: "moon.stars.fill")
@@ -170,9 +204,21 @@ struct TodayView: View {
                         .foregroundStyle(AppColors.secondaryInk)
 
                 case .upcoming:
-                    Label("Challenge starts soon", systemImage: "calendar.badge.clock")
-                        .font(.title2.bold())
-                    Text("Starts \(challenge.startDate.formatted(date: .long, time: .omitted))")
+                    Label(
+                        CrewEdgeCopy.scheduledStartsLabel(
+                            startDate: challenge.startDate,
+                            now: store.environment.clock.now
+                        ),
+                        systemImage: "calendar.badge.clock"
+                    )
+                    .font(.title2.bold())
+                    Text(challenge.title)
+                        .font(.title3.bold())
+                    Text(CrewEdgeCopy.scheduledSupportingCopy(
+                        title: challenge.activityType,
+                        durationDays: RoundProgress.dayOfRound(challenge: challenge, now: challenge.startDate)?.total
+                            ?? max(1, (Calendar.current.dateComponents([.day], from: challenge.startDate, to: challenge.endDate).day ?? 0) + 1)
+                    ))
                         .foregroundStyle(AppColors.secondaryInk)
 
                 case .closed:
@@ -180,6 +226,7 @@ struct TodayView: View {
                         .font(.title2.bold())
                     Text("You can check in again on the next scheduled day.")
                         .foregroundStyle(AppColors.secondaryInk)
+                    rejectionStrip
                 }
             }
         }
@@ -226,60 +273,109 @@ struct TodayView: View {
         }
     }
 
-    private var crewPostedStrip: some View {
+    /// Quantity/clip detail for peers after the viewer can reveal — rail already shows full roster status.
+    private var revealedPeerDetailStrip: some View {
         let peers = store.todayPeerCheckIns
-        let spoilered = !store.canRevealTodayQuantities
         return Group {
-            if !peers.isEmpty {
+            if store.canRevealTodayQuantities, !peers.isEmpty {
                 VStack(alignment: .leading, spacing: AppSpacing.small) {
-                    Text(spoilered ? "Crew posted · hidden until you go" : "Crew today")
+                    Text("Crew check-ins")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(AppColors.secondaryInk)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: AppSpacing.small) {
                             ForEach(peers) { submission in
                                 if let user = store.snapshot?.users.first(where: { $0.id == submission.userID }) {
-                                    VStack(spacing: 4) {
-                                        AvatarView(user: user, size: 40)
-                                        Text(user.displayName.split(separator: " ").first.map(String.init) ?? user.displayName)
-                                            .font(.caption2.bold())
-                                            .lineLimit(1)
-                                        if spoilered {
-                                            Text("Hidden")
-                                                .font(.caption2)
-                                                .foregroundStyle(AppColors.secondaryInk)
-                                        } else {
-                                            if let clip = PeerClipPlayButton.playableClip(from: submission) {
-                                                PeerClipPlayButton(clip: clip)
-                                            }
-                                            if let challenge = store.currentChallenge {
-                                                Text("\(Int(submission.quantity))")
-                                                    .font(.caption.bold().monospacedDigit())
-                                                Text(challenge.measurementType.shortName)
-                                                    .font(.caption2)
-                                                    .foregroundStyle(AppColors.secondaryInk)
-                                            }
-                                        }
-                                    }
-                                    .frame(width: 72)
+                                    peerCheckInCell(user: user, submission: submission)
                                 }
                             }
                         }
                     }
                 }
-                .accessibilityIdentifier("today.crewStrip")
             }
+        }
+    }
+
+    @ViewBuilder
+    private func peerCheckInCell(user: CahootsUser, submission: Submission) -> some View {
+        let clip = PeerClipPlayButton.playableClip(from: submission)
+        let content = VStack(spacing: 4) {
+            AvatarView(user: user, size: 40)
+            Text(user.displayName.split(separator: " ").first.map(String.init) ?? user.displayName)
+                .font(.caption2.bold())
+                .lineLimit(1)
+            if clip != nil {
+                HStack(spacing: 2) {
+                    Image(systemName: "play.circle.fill")
+                        .font(.title2)
+                    Text("Play")
+                        .font(.caption2.weight(.semibold))
+                }
+                .foregroundStyle(AppColors.ink)
+            }
+            if let challenge = store.currentChallenge {
+                Text("\(Int(submission.quantity))")
+                    .font(.caption.bold().monospacedDigit())
+                Text(challenge.measurementType.shortName)
+                    .font(.caption2)
+                    .foregroundStyle(AppColors.secondaryInk)
+            }
+        }
+        .frame(width: 80)
+        .padding(.vertical, 4)
+
+        if let clip {
+            PeerClipPlaybackTrigger(
+                clip: clip,
+                accessibilityPlayLabel: String(localized: "Play \(user.displayName)’s clip")
+            ) {
+                content
+            }
+        } else {
+            content
+        }
+    }
+
+    private func handleCrewMemberTap(_ entry: TodayMemberStatusEntry) {
+        clipUnlockHint = nil
+        guard entry.status == .done, !entry.isCurrentUser else { return }
+
+        if store.canRevealTodayQuantities {
+            if let submission = store.todayPeerCheckIns.first(where: { $0.userID == entry.user.id }),
+               let clip = PeerClipPlayButton.playableClip(from: submission) {
+                railPlaybackClip = clip
+            } else {
+                clipUnlockHint = String(localized: "No clip available for \(entry.user.displayName).")
+            }
+            return
+        }
+
+        let firstName = entry.user.displayName.split(separator: " ").first.map(String.init) ?? entry.user.displayName
+        if let group = store.currentGroup {
+            clipUnlockHint = FriendPostedCopy.lockScreenBody(
+                actorName: firstName,
+                groupName: group.name,
+                viewerHasCompleted: false
+            )
+        } else {
+            clipUnlockHint = String(localized: "\(firstName) posted — log yours to see it.")
         }
     }
 
     private func captionRow(_ challenge: CahootsChallenge) -> some View {
         let streak = currentEntry?.currentStreak ?? 0
         let rank = store.currentRank.map { "#\($0)" } ?? "—"
-        return Text("\(streak)-day streak · Rank \(rank) · \(challenge.title)")
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(AppColors.secondaryInk)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityLabel("\(streak) day streak, rank \(rank), \(challenge.title)")
+        return VStack(alignment: .leading, spacing: AppSpacing.micro) {
+            Text("Rank \(rank)")
+                .font(.headline.weight(.bold))
+                .foregroundStyle(AppColors.ink)
+            Text("\(streak)-day streak · \(challenge.title)")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(AppColors.secondaryInk)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(streak) day streak, rank \(rank), \(challenge.title)")
     }
 
     private static func formatCountdown(_ interval: TimeInterval) -> String {
@@ -297,27 +393,20 @@ struct TodayView: View {
     }
 
     private var checkInBar: some View {
-        HStack(spacing: AppSpacing.small) {
-            if store.remainingRecoveryDays > 0 {
-                Button {
-                    confirmRecovery = true
-                } label: {
-                    VStack(spacing: 2) {
-                        Image(systemName: "moon.zzz.fill")
-                            .font(.headline.weight(.bold))
-                        Text("Rest")
-                            .font(.caption2.weight(.semibold))
-                    }
-                    .frame(width: 54, height: 54)
-                    .background(AppColors.card, in: RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous))
-                    .foregroundStyle(AppColors.ink)
-                }
-                .accessibilityLabel("Need a rest day?")
-                .accessibilityIdentifier("today.rest")
-            }
+        VStack(spacing: AppSpacing.small) {
             Button(hasPendingFinishClip ? "Finish workout" : "Log workout") { showCheckIn = true }
                 .buttonStyle(PrimaryButtonStyle())
                 .accessibilityIdentifier("today.logWorkout")
+            if store.remainingRecoveryDays > 0 {
+                Button("Need a rest day?") {
+                    confirmRecovery = true
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(AppColors.secondaryInk)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .accessibilityLabel("Need a rest day?")
+                .accessibilityIdentifier("today.rest")
+            }
         }
     }
 
@@ -325,45 +414,50 @@ struct TodayView: View {
     private var pendingSyncCard: some View {
         let pending = store.currentPendingOperations
         if !pending.isEmpty {
-            let failed = pending.filter { operation in
-                store.snapshot?.submissions.first(where: { $0.clientGeneratedID == operation.clientGeneratedID })?.syncState == .failed
-            }.count
+            let failed = store.hasFailedPendingSync
+            let detail = store.currentPendingSyncError
+                ?? (failed
+                    ? FriendFacingCopy.syncExplanation(for: .failed)
+                    : FriendFacingCopy.syncExplanation(for: .waiting))
             CahootsCard {
                 AdaptiveStack(spacing: AppSpacing.medium) {
                     Image(systemName: "arrow.triangle.2.circlepath").font(.title2).foregroundStyle(AppColors.accent)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(FriendFacingCopy.savedOnPhone).font(.headline)
-                        Text(failed > 0
-                              ? String(localized: "Retry when you have a stable connection.")
-                              : String(localized: "Your workout will update automatically."))
+                        Text(detail)
                             .font(.caption)
                             .foregroundStyle(AppColors.secondaryInk)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer()
-                    if failed > 0 {
-                        Button("Retry") { Task { await store.retryPending() } }
-                            .font(.subheadline.bold())
-                            .disabled(store.isOffline)
-                    }
+                    Button("Retry") { Task { await store.retryPending() } }
+                        .font(.subheadline.bold())
+                        .disabled(store.isOffline)
+                        .accessibilityIdentifier("today.syncRetry")
                 }
             }
         }
     }
 
     @ViewBuilder
-    private var rejectedSyncCard: some View {
+    private var rejectionStrip: some View {
         if let rejected = store.currentRejectedSubmissions.first {
-            CahootsCard {
-                HStack(alignment: .top, spacing: AppSpacing.medium) {
-                    Image(systemName: "exclamationmark.shield.fill").font(.title2).foregroundStyle(AppColors.danger)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(FriendFacingCopy.syncLabel(for: .rejected)).font(.headline)
-                        Text(rejected.rejectionReason ?? FriendFacingCopy.syncExplanation(for: .rejected))
-                            .font(.caption)
-                            .foregroundStyle(AppColors.secondaryInk)
-                    }
+            HStack(alignment: .top, spacing: AppSpacing.small) {
+                Image(systemName: "exclamationmark.shield.fill")
+                    .font(.body.bold())
+                    .foregroundStyle(AppColors.danger)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(FriendFacingCopy.syncLabel(for: .rejected))
+                        .font(.subheadline.weight(.semibold))
+                    Text(rejected.rejectionReason ?? FriendFacingCopy.syncExplanation(for: .rejected))
+                        .font(.caption)
+                        .foregroundStyle(AppColors.secondaryInk)
                 }
+                Spacer(minLength: 0)
             }
+            .padding(AppSpacing.small)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppColors.danger.opacity(0.16), in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
         }
     }
 
@@ -386,6 +480,8 @@ struct TodayView: View {
     private func state(for challenge: CahootsChallenge) -> TodayRequirementState {
         let now = store.environment.clock.now
         if now < (ScheduleEngine.startInstant(for: challenge) ?? challenge.startDate) { return .upcoming }
+        // Check-in only after reconcile has activated the challenge (start date met).
+        if challenge.status != .active { return .upcoming }
         guard ScheduleEngine.isScheduled(on: now, challenge: challenge) else { return .restDay }
         if store.todayPoints > 0 { return .complete }
         if store.recoveryUsedToday { return .recovery }
@@ -393,13 +489,17 @@ struct TodayView: View {
         return .scheduledIncomplete
     }
 
-    private func statusText(_ state: TodayRequirementState) -> String {
+    private func statusText(_ state: TodayRequirementState, challenge: CahootsChallenge) -> String {
         switch state {
         case .scheduledIncomplete: "Ready"
         case .complete: "Complete"
         case .restDay: "Rest day"
         case .recovery: "Recovery"
-        case .upcoming: "Upcoming"
+        case .upcoming:
+            CrewEdgeCopy.scheduledStartsLabel(
+                startDate: challenge.startDate,
+                now: store.environment.clock.now
+            )
         case .closed: "Missed"
         }
     }

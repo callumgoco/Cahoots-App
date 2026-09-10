@@ -1,7 +1,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, json } from "../_shared/cors.ts";
 
-/** Scheduled retention job: purge workout clips older than 7 days or on completed rounds. */
+/** Scheduled retention job: purge clips past deadline+48h, ended rounds, and 24h orphan objects. */
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const secret = request.headers.get("x-cron-secret");

@@ -21,7 +21,7 @@ enum DemoSeed {
         let groupID = UUID(uuidString: "10000000-0000-0000-0000-000000000001") ?? UUID()
         let group = CahootsGroup(id: groupID, name: "Saturday Crew", emoji: "⚡️", ownerID: jennifer.id, memberLimit: 12, createdAt: createdAt, updatedAt: now, archivedAt: nil)
         let memberships = users.enumerated().map { offset, member in
-            GroupMembership(id: UUID(), groupID: groupID, userID: member.id, role: offset == 1 ? .owner : (offset == 0 ? .admin : .member), status: .active, joinedAt: createdAt.addingTimeInterval(Double(offset) * 600), leftAt: nil, notificationLevel: .digest)
+            GroupMembership(id: UUID(), groupID: groupID, userID: member.id, role: offset == 1 ? .owner : (offset == 0 ? .admin : .member), status: .active, joinedAt: createdAt.addingTimeInterval(Double(offset) * 600), leftAt: nil, notificationLevel: .immediate)
         }
 
         let challengeID = UUID(uuidString: "20000000-0000-0000-0000-000000000001") ?? UUID()
@@ -41,7 +41,7 @@ enum DemoSeed {
         let secondGroupID = UUID(uuidString: "10000000-0000-0000-0000-000000000002") ?? UUID()
         let secondGroup = CahootsGroup(id: secondGroupID, name: "Lunch Break Club", emoji: "🌿", ownerID: you.id, memberLimit: 8, createdAt: createdAt.addingTimeInterval(-86_400), updatedAt: now, archivedAt: nil)
         let secondMemberships = [you, priya, casey].enumerated().map { index, member in
-            GroupMembership(id: UUID(), groupID: secondGroupID, userID: member.id, role: index == 0 ? .owner : .member, status: .active, joinedAt: createdAt.addingTimeInterval(-86_400 + Double(index) * 600), leftAt: nil, notificationLevel: .digest)
+            GroupMembership(id: UUID(), groupID: secondGroupID, userID: member.id, role: index == 0 ? .owner : .member, status: .active, joinedAt: createdAt.addingTimeInterval(-86_400 + Double(index) * 600), leftAt: nil, notificationLevel: .immediate)
         }
         let secondChallengeID = UUID(uuidString: "20000000-0000-0000-0000-000000000002") ?? UUID()
         let secondChallenge = CahootsChallenge(id: secondChallengeID, groupID: secondGroupID, proposalID: nil, title: "Lunch Walk Challenge", activityType: "walking minutes", measurementType: .minutes, minimumQuantity: 20, frequencyType: .selectedWeekdays, scheduledWeekdays: [2, 3, 4, 5, 6], timesPerWeek: nil, startDate: start, endDate: end, challengeTimezone: "Europe/London", dailyDeadlineMinutes: 14 * 60, recoveryDayAllowance: 1, status: .active, scoringVersion: 1, createdAt: start)
@@ -143,7 +143,7 @@ enum DemoSeed {
 
         let invite = GroupInvite(id: UUID(), groupID: groupID, code: "CAHOOT", createdBy: jennifer.id, expiresAt: now.addingTimeInterval(14 * 86_400), maximumUses: 12, useCount: 6, revokedAt: nil)
         let secondInvite = GroupInvite(id: UUID(), groupID: secondGroupID, code: "MOVE24", createdBy: you.id, expiresAt: now.addingTimeInterval(14 * 86_400), maximumUses: 8, useCount: 3, revokedAt: nil)
-        let preference = NotificationPreference(id: UUID(), userID: you.id, groupID: groupID, personalRemindersEnabled: true, friendActivityMode: .digest, challengeUpdatesEnabled: true, quietHoursStart: 22 * 60, quietHoursEnd: 7 * 60, reminderMinutes: 18 * 60)
+        let preference = NotificationPreference(id: UUID(), userID: you.id, groupID: groupID, personalRemindersEnabled: true, friendActivityMode: .immediate, challengeUpdatesEnabled: true, quietHoursStart: 22 * 60, quietHoursEnd: 7 * 60, reminderMinutes: 18 * 60)
         let notificationSettings = UserNotificationSettings(quietHoursStart: 22 * 60, quietHoursEnd: 7 * 60, defaultReminderMinutes: 18 * 60, primerDismissed: false, groups: [.defaults(groupID: groupID), .defaults(groupID: secondGroupID)])
         let previousTop = LeaderboardEngine.ranked(Array(allTime.prefix(3)))
         let previous = PreviousChallengeSummary(id: UUID(), title: "Spring Squat Challenge", winnerName: "Jennifer Hale", topThree: previousTop, totalCompletions: 146, personalBest: 18)

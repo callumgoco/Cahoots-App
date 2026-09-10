@@ -8,11 +8,12 @@ struct RequirementKey: Hashable, Codable, Sendable {
     let day: Int
 
     init?(challenge: CahootsChallenge, userID: UUID, date: Date) {
-        guard let timezone = TimeZone(identifier: challenge.challengeTimezone) else { return nil }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = timezone
-        let parts = calendar.dateComponents([.year, .month, .day], from: date)
-        guard let year = parts.year, let month = parts.month, let day = parts.day else { return nil }
+        guard let token = ScheduleEngine.requirementDateToken(for: date, challenge: challenge) else { return nil }
+        let parts = token.split(separator: "-")
+        guard parts.count == 3,
+              let year = Int(parts[0]),
+              let month = Int(parts[1]),
+              let day = Int(parts[2]) else { return nil }
         self.challengeID = challenge.id
         self.userID = userID
         self.year = year

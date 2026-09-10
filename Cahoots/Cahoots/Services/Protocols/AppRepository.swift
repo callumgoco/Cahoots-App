@@ -6,9 +6,9 @@ protocol AppRepository {
     func load() async throws -> DemoSnapshot
     func save(_ snapshot: DemoSnapshot) async throws
     func reset() async throws -> DemoSnapshot
-    func syncSubmission(_ submission: Submission) async -> SubmissionSyncResult
+    func syncSubmission(_ submission: Submission, challengeTimezone: String) async -> SubmissionSyncResult
     func perform(_ command: RepositoryCommand) async throws -> DemoSnapshot?
-    func requestClipUploadURL(groupID: UUID, challengeID: UUID, requirementDate: Date, clipID: UUID) async throws -> ClipUploadTicket
+    func requestClipUploadURL(groupID: UUID, challengeID: UUID, requirementDateToken: String, clipID: UUID) async throws -> ClipUploadTicket
     func uploadClip(ticket: ClipUploadTicket, fileURL: URL) async throws
     func requestClipDownloadURL(clipID: UUID) async throws -> ClipDownloadTicket
     func clearLocalOfflineState() async throws
@@ -38,10 +38,11 @@ struct SubmissionReceipt: Codable, Hashable, Sendable {
 }
 
 enum SubmissionSyncResult: Hashable, Sendable {
-    case accepted(SubmissionReceipt)
+    /// `uploadedClips` carries any clip rows that already have a remote path so retries skip re-upload.
+    case accepted(SubmissionReceipt, uploadedClips: [WorkoutClip] = [])
     case rejected(String)
-    case retryable(String, retryAfter: TimeInterval?)
-    case authenticationRequired
+    case retryable(String, retryAfter: TimeInterval?, uploadedClips: [WorkoutClip] = [])
+    case authenticationRequired(uploadedClips: [WorkoutClip] = [])
 }
 
 protocol EntitlementService: Sendable {
