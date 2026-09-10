@@ -416,27 +416,31 @@ struct AvatarView: View {
     private var background: Color { AvatarMark.paletteColor(for: user.id) }
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [background, background.opacity(0.72)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+        // Highlight lives in an overlay so its offset cannot expand layout and clip the fill.
+        Circle()
+            .fill(
+                LinearGradient(
+                    colors: [background, background.opacity(0.72)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
                 )
-            Circle()
-                .fill(Color.white.opacity(0.12))
-                .frame(width: size * 0.55, height: size * 0.55)
-                .offset(x: -size * 0.18, y: -size * 0.16)
-            Image(systemName: mark.symbolName)
-                .font(.system(size: size * 0.42, weight: .semibold))
-                .foregroundStyle(.white)
-                .symbolRenderingMode(.hierarchical)
-        }
-        .frame(width: size, height: size)
-        .clipShape(Circle())
-        .accessibilityLabel(user.displayName)
+            )
+            .overlay {
+                Circle()
+                    .fill(Color.white.opacity(0.12))
+                    .frame(width: size * 0.55, height: size * 0.55)
+                    .offset(x: -size * 0.18, y: -size * 0.16)
+                    .allowsHitTesting(false)
+            }
+            .overlay {
+                Image(systemName: mark.symbolName)
+                    .font(.system(size: size * 0.36, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .symbolRenderingMode(.hierarchical)
+            }
+            .frame(width: size, height: size)
+            .clipShape(Circle())
+            .accessibilityLabel(user.displayName)
     }
 }
 
@@ -494,6 +498,9 @@ struct CrewTodayStatusRail: View {
                             memberCell(entry)
                         }
                     }
+                    // Room for the status ring and badge so ScrollView does not clip them.
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 4)
                 }
             }
             .modifier(OptionalAccessibilityIdentifier(accessibilityID))
@@ -503,16 +510,16 @@ struct CrewTodayStatusRail: View {
     @ViewBuilder
     private func memberCell(_ entry: TodayMemberStatusEntry) -> some View {
         let content = VStack(spacing: 6) {
-            ZStack(alignment: .bottomTrailing) {
-                AvatarView(user: entry.user, size: avatarSize)
-                    .overlay {
-                        Circle()
-                            .stroke(ringColor(for: entry.status), lineWidth: entry.status == .pending ? 1.5 : 2.5)
-                            .padding(-2)
-                    }
-                statusBadge(for: entry.status)
-                    .offset(x: 2, y: 2)
-            }
+            AvatarView(user: entry.user, size: avatarSize)
+                .overlay {
+                    Circle()
+                        .stroke(ringColor(for: entry.status), lineWidth: entry.status == .pending ? 1.5 : 2.5)
+                }
+                .padding(3)
+                .overlay(alignment: .bottomTrailing) {
+                    statusBadge(for: entry.status)
+                        .offset(x: 2, y: 2)
+                }
             Text(entry.isCurrentUser
                   ? String(localized: "You")
                   : (entry.user.displayName.split(separator: " ").first.map(String.init) ?? entry.user.displayName))
@@ -520,7 +527,7 @@ struct CrewTodayStatusRail: View {
                 .foregroundStyle(AppColors.ink)
                 .lineLimit(1)
         }
-        .frame(width: max(64, avatarSize + 12))
+        .frame(width: max(72, avatarSize + 20))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(entry.isCurrentUser ? String(localized: "You") : entry.user.displayName), \(statusLabel(for: entry.status))")
 
