@@ -32,7 +32,9 @@ enum CrewUpdateCopy {
         String(localized: "The crew accepted \(title). The round is live.")
     }
 
-    static func roundStartingLocalTitle() -> String {
+    // nonisolated so NotificationService (a background actor) can call these under
+    // SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor.
+    nonisolated static func roundStartingLocalTitle() -> String {
         String(localized: "Your next round starts soon")
     }
 
@@ -40,11 +42,11 @@ enum CrewUpdateCopy {
         String(localized: "\(title) begins today. Open Today to get ready.")
     }
 
-    static func voteOpenedLocalTitle() -> String {
+    nonisolated static func voteOpenedLocalTitle() -> String {
         String(localized: "A group vote is open")
     }
 
-    static func voteOpenedLocalBody() -> String {
+    nonisolated static func voteOpenedLocalBody() -> String {
         String(localized: "Your crew needs your vote before the proposal closes.")
     }
 }

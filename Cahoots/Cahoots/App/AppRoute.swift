@@ -16,7 +16,9 @@ enum AppRoute: Equatable, Sendable {
     }
 
     /// Builds a deep link suitable for local/remote notification payloads.
-    static func deepLink(for item: NotificationPlanItem) -> String {
+    /// nonisolated so NotificationService (a background actor) can call this under
+    /// SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor.
+    nonisolated static func deepLink(for item: NotificationPlanItem) -> String {
         switch item.kind {
         case .vote, .voteOpened:
             if let proposalID = item.proposalID {
