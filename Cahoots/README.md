@@ -42,7 +42,7 @@ Demo mode seeds two joined groupsâ€”**Saturday Crew** and **Lunch Break Club**â€
 
 ## CI
 
-GitHub Actions runs `Cahoots/Scripts/ci.sh` on push/PR (see `.github/workflows/ci.yml`). It executes unit/UI tests and an unsigned Release archive under the `Cahoots` scheme. When gitignored `Configuration.xcconfig` is missing, the script copies `Configuration.example.xcconfig` so Xcode can open that base configuration. The `YOUR_` placeholders keep CI in demo mode.
+GitHub Actions runs `Cahoots/Scripts/ci.sh` on push/PR (see `.github/workflows/ci.yml`). It executes unit/UI tests and an unsigned Release archive under the `Cahoots` scheme. The script waits for CoreSimulator, then picks an installed iPhone, preferring iPhone 16 on iOS 18.6. Set `CI_DESTINATION` to override that. When gitignored `Configuration.xcconfig` is missing, the script copies `Configuration.example.xcconfig` so Xcode can open that base configuration. The `YOUR_` placeholders keep CI in demo mode.
 
 Locally:
 

@@ -17,5 +17,3 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode.app
       - name: Run tests and unsigned Release archive
         run: Scripts/ci.sh
-        env:
-          CI_DESTINATION: platform=iOS Simulator,name=iPhone 16,OS=18.6
