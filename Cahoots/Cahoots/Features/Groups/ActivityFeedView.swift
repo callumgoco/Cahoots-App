@@ -13,9 +13,10 @@ struct ActivityFeedView: View {
                 }
             }
             .padding(AppSpacing.page)
-            .padding(.bottom, 24)
+            .cahootsTabBarClearance()
         }
         .navigationTitle("Activity")
+        .cahootsDrillInBar()
         .overlay {
             if store.currentActivity.isEmpty {
                 ContentUnavailableView("No group activity yet", systemImage: "waveform.path.ecg", description: Text("Private, quantity-free updates will appear here."))
@@ -37,11 +38,31 @@ struct ActivityRow: View {
                 .background(symbolBackground, in: Circle())
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.message).font(.subheadline.weight(.medium))
-                Text(item.createdAt, style: .relative).font(.caption).foregroundStyle(AppColors.secondaryInk)
+                Text(relativeTimestamp(item.createdAt)).font(.caption).foregroundStyle(AppColors.secondaryInk)
             }
             Spacer()
         }
         .accessibilityElement(children: .combine)
+    }
+
+    private func relativeTimestamp(_ date: Date) -> String {
+        let interval = Date.now.timeIntervalSince(date)
+        let minute: TimeInterval = 60
+        let hour = 60 * minute
+        let day = 24 * hour
+        if interval < minute {
+            return String(localized: "Just now")
+        }
+        if interval < hour {
+            let minutes = Int(interval / minute)
+            return minutes == 1 ? String(localized: "1 min") : String(localized: "\(minutes) mins")
+        }
+        if interval < day {
+            let hours = Int(interval / hour)
+            return hours == 1 ? String(localized: "1 hr") : String(localized: "\(hours) hrs")
+        }
+        let days = Int(interval / day)
+        return days == 1 ? String(localized: "1 day") : String(localized: "\(days) days")
     }
 
     private var symbol: String {

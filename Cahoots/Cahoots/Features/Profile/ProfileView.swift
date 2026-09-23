@@ -18,9 +18,7 @@ struct ProfileView: View {
                         Text("You")
                             .font(.largeTitle.bold())
                             .accessibilityAddTraits(.isHeader)
-                        Spacer(minLength: AppSpacing.small)
-                        // Match Crew's trailing control height so the title row lands on the same baseline.
-                        Color.clear.frame(width: 44, height: 44)
+                        Spacer(minLength: 0)
                     }
 
                     profileHeader
@@ -39,16 +37,70 @@ struct ProfileView: View {
                             .frame(minHeight: 44)
                     }
 
+                    settingsSection(title: "Cahoots Plus") {
+                        if store.effectiveEntitlement.hasPlusAccess {
+                            Label {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Plus active")
+                                    Text("Up to \(store.crewMembershipLimit) crews")
+                                        .font(.caption)
+                                        .foregroundStyle(AppColors.secondaryInk)
+                                }
+                            } icon: {
+                                Image(systemName: "checkmark.seal.fill")
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .frame(minHeight: 44)
+                            Divider()
+                            Button("Manage subscription") {
+                                store.presentPaywall(.manage)
+                            }
+                            .font(.body.weight(.semibold))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .frame(minHeight: 44)
+                            .accessibilityIdentifier("profile.managePlus")
+                        } else {
+                            Text("Free includes one crew. Plus unlocks up to ten.")
+                                .font(.caption)
+                                .foregroundStyle(AppColors.secondaryInk)
+                            Divider()
+                            Button("Upgrade to Plus") {
+                                store.presentPaywall(.manage)
+                            }
+                            .font(.body.weight(.semibold))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .frame(minHeight: 44)
+                            .accessibilityIdentifier("profile.upgradePlus")
+                        }
+                        Divider()
+                        Button("Restore purchases") {
+                            Task {
+                                if let error = await store.restorePlusPurchases() {
+                                    store.errorBanner = error
+                                }
+                            }
+                        }
+                        .font(.body.weight(.semibold))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("profile.restorePlus")
+                    }
+
                     settingsSection(title: "Preferences") {
                         NavigationLink { NotificationSettingsView() } label: {
                             settingsLabel("Notifications", systemImage: "bell.fill")
                         }
                         Divider()
-                        Picker(selection: appearanceBinding) {
-                            ForEach(AppearancePreference.allCases) { Text($0.displayName).tag($0) }
-                        } label: {
+                        HStack {
                             Label("Appearance", systemImage: "circle.lefthalf.filled")
+                            Spacer(minLength: AppSpacing.small)
+                            Picker("Appearance", selection: appearanceBinding) {
+                                ForEach(AppearancePreference.allCases) { Text($0.displayName).tag($0) }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
                         }
+                        .frame(minHeight: 44)
                         Divider()
                         themePicker
                     }
@@ -92,7 +144,7 @@ struct ProfileView: View {
                     }
                 }
                 .padding(AppSpacing.page)
-                .padding(.bottom, 24)
+                .cahootsTabBarClearance()
             }
             .navigationTitle("You")
             .navigationBarTitleDisplayMode(.inline)
@@ -101,12 +153,17 @@ struct ProfileView: View {
             .sheet(isPresented: $showEditName) { EditNameView() }
             .sheet(isPresented: $showCreateGroup) { CreateGroupView() }
             .sheet(isPresented: $showJoinGroup) { JoinGroupView() }
-            .confirmationDialog("Add group", isPresented: $showAddGroup, titleVisibility: .visible) {
+            .alert("Add group", isPresented: $showAddGroup) {
                 Button("Create a group") { showCreateGroup = true }
                 Button("Join with a code") { showJoinGroup = true }
                 Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Start a new crew or join one with an invite code.")
             }
-            .confirmationDialog("Sign out of Cahoots?", isPresented: $showSignOut) { Button("Sign out", role: .destructive) { Task { await store.signOutAsync() } } }
+            .alert("Sign out of Cahoots?", isPresented: $showSignOut) {
+                Button("Sign out", role: .destructive) { Task { await store.signOutAsync() } }
+                Button("Cancel", role: .cancel) {}
+            }
             .alert("Delete your account?", isPresented: $showDelete) {
                 Button("Delete account", role: .destructive) { Task { await store.deleteAccount() } }
                 Button("Cancel", role: .cancel) {}
@@ -177,26 +234,25 @@ struct ProfileView: View {
             Label("Theme", systemImage: "paintpalette.fill")
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(minHeight: 44)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: AppSpacing.small)], spacing: AppSpacing.small) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 56), spacing: AppSpacing.small)], spacing: AppSpacing.small) {
                 ForEach(AppColorTheme.allCases) { theme in
                     Button {
                         store.setColorTheme(theme)
                     } label: {
-                        VStack(spacing: 6) {
+                        VStack(spacing: 4) {
                             ZStack {
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
                                     .fill(theme.swatchSoft)
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
                                     .fill(theme.swatchBold)
                                     .padding(10)
-                                    .offset(x: 6, y: 6)
                             }
-                            .frame(height: 56)
+                            .frame(height: 44)
                             .overlay {
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
                                     .strokeBorder(
-                                        store.colorTheme == theme ? AppColors.ink : AppColors.ink.opacity(0.12),
-                                        lineWidth: store.colorTheme == theme ? 2.5 : 1
+                                        store.colorTheme == theme ? AppColors.ink : AppColors.ink.opacity(0.1),
+                                        lineWidth: store.colorTheme == theme ? 1.5 : 1
                                     )
                             }
                             Text(theme.displayName)
@@ -308,10 +364,16 @@ struct NotificationSettingsView: View {
                                 .font(.caption)
                                 .foregroundStyle(AppColors.secondaryInk)
                             Divider()
-                            Picker("Friend activity", selection: groupBinding(group.id, \.friendActivityMode)) {
-                                Text("Immediate").tag(NotificationLevel.immediate)
-                                Text("Daily digest").tag(NotificationLevel.digest)
-                                Text("Off").tag(NotificationLevel.off)
+                            HStack {
+                                Text("Friend activity")
+                                Spacer(minLength: AppSpacing.small)
+                                Picker("Friend activity", selection: groupBinding(group.id, \.friendActivityMode)) {
+                                    Text("Immediate").tag(NotificationLevel.immediate)
+                                    Text("Daily digest").tag(NotificationLevel.digest)
+                                    Text("Off").tag(NotificationLevel.off)
+                                }
+                                .labelsHidden()
+                                .pickerStyle(.menu)
                             }
                             .frame(minHeight: 44)
                             .accessibilityIdentifier("notifications.friendActivity.\(group.id.uuidString)")
@@ -341,11 +403,12 @@ struct NotificationSettingsView: View {
                 }
             }
             .padding(AppSpacing.page)
-            .padding(.bottom, 24)
+            .cahootsTabBarClearance()
         }
         .roundPage()
         .navigationTitle("Notifications")
         .navigationBarTitleDisplayMode(.inline)
+        .cahootsDrillInBar()
         .toolbar(.visible, for: .navigationBar)
         .navigationBarBackButtonHidden(autosaveFailed)
         .toolbar {
@@ -363,7 +426,7 @@ struct NotificationSettingsView: View {
                 }
             }
         }
-        .confirmationDialog("Leave without saving?", isPresented: $confirmLeaveAfterFailure, titleVisibility: .visible) {
+        .alert("Leave without saving?", isPresented: $confirmLeaveAfterFailure) {
             Button("Leave without saving", role: .destructive) { dismiss() }
             Button("Keep editing", role: .cancel) {}
         } message: {
@@ -500,10 +563,11 @@ private struct BlockedMembersView: View {
                 }
             }
             .padding(AppSpacing.page)
-            .padding(.bottom, 24)
+            .cahootsTabBarClearance()
         }
         .roundPage()
         .navigationTitle("Blocked members")
+        .cahootsDrillInBar()
         .overlay {
             if members.isEmpty {
                 ContentUnavailableView("No blocked members", systemImage: "hand.raised.slash", description: Text("People you block will appear here."))
@@ -541,10 +605,11 @@ struct PrivacySummaryView: View {
                 }
             }
             .padding(AppSpacing.page)
-            .padding(.bottom, 24)
+            .cahootsTabBarClearance()
         }
         .roundPage()
         .navigationTitle("Privacy")
+        .cahootsDrillInBar()
     }
 }
 
@@ -557,8 +622,11 @@ struct GuidelinesView: View {
                 Text("Reports are reviewed under the group safety process. Immediate danger should be reported to the relevant local service.").foregroundStyle(AppColors.secondaryInk)
             }
             .padding(AppSpacing.page)
+            .cahootsTabBarClearance()
         }
         .navigationTitle("Guidelines")
         .navigationBarTitleDisplayMode(.inline)
+        .cahootsDrillInBar()
+        .roundPage()
     }
 }

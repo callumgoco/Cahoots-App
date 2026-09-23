@@ -4,7 +4,7 @@ import { corsHeaders, json } from "../_shared/cors.ts";
 // Column grants intentionally omit apple_subject_id; select("*") fails with
 // "permission denied for table profiles" for authenticated/anon roles.
 const PROFILE_COLUMNS =
-  "id, display_name, avatar_path, timezone_identifier, shows_exact_totals, created_at, updated_at, deleted_at, appearance_preference";
+  "id, display_name, avatar_path, timezone_identifier, shows_exact_totals, created_at, updated_at, deleted_at, appearance_preference, entitlement, plus_expires_at, plus_preview_until, plus_original_transaction_id, entitlement_updated_at";
 
 const nowISO = () => new Date().toISOString();
 const iso = (value: string | null | undefined) => value ? new Date(value).toISOString() : null;
@@ -39,6 +39,9 @@ function mapUser(row: Record<string, unknown>) {
     timezoneIdentifier: row.timezone_identifier,
     createdAt: iso(row.created_at as string), updatedAt: iso(row.updated_at as string),
     deletedAt: iso(row.deleted_at as string | null), showsExactTotals: row.shows_exact_totals ?? false,
+    entitlement: row.entitlement ?? "free",
+    plusExpiresAt: iso(row.plus_expires_at as string | null),
+    plusPreviewUntil: iso(row.plus_preview_until as string | null),
   };
 }
 

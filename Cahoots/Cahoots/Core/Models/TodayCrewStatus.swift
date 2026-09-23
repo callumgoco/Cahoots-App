@@ -101,7 +101,7 @@ enum CrewAccountabilityCopy {
         if accounted == 0 {
             return String(localized: "Waiting on \(names).")
         }
-        return String(localized: "\(accounted) of \(entries.count) done · \(names) still need to.")
+        return String(localized: "\(accounted) of \(entries.count) done · \(stillNeedClause(names: names, action: .checkIn))")
     }
 
     static func stillNeedToCheckIn(entries: [TodayMemberStatusEntry], nameLimit: Int = 4) -> String? {
@@ -127,7 +127,7 @@ enum CrewAccountabilityCopy {
             return String(localized: "Everyone has voted.")
         }
         let names = listNames(outstanding.map { displayName($0, currentUserID: currentUserID) }, limit: nameLimit)
-        return String(localized: "\(votedUserIDs.count) of \(eligible.count) voted · \(names) still need to.")
+        return String(localized: "\(votedUserIDs.count) of \(eligible.count) voted · \(stillNeedClause(names: names, action: .vote))")
     }
 
     static func eveningNudge(pendingOthers: Int) -> String {
@@ -138,6 +138,31 @@ enum CrewAccountabilityCopy {
             return String(localized: "You and 1 other still need to check in.")
         }
         return String(localized: "You and \(pendingOthers) others still need to check in.")
+    }
+
+    private enum OutstandingAction {
+        case checkIn
+        case vote
+    }
+
+    /// Completes “… still need(s) to check in / vote.” with correct singular/plural grammar.
+    private static func stillNeedClause(names: String, action: OutstandingAction) -> String {
+        let isYou = names == String(localized: "You")
+        let isSingularPerson = isYou || (!names.contains(" and ") && !names.contains(", "))
+        switch (action, isYou, isSingularPerson) {
+        case (.checkIn, true, _):
+            return String(localized: "You still need to check in.")
+        case (.vote, true, _):
+            return String(localized: "You still need to vote.")
+        case (.checkIn, false, true):
+            return String(localized: "\(names) still needs to check in.")
+        case (.vote, false, true):
+            return String(localized: "\(names) still needs to vote.")
+        case (.checkIn, false, false):
+            return String(localized: "\(names) still need to check in.")
+        case (.vote, false, false):
+            return String(localized: "\(names) still need to vote.")
+        }
     }
 
     private static func pendingPrefix(_ pending: [TodayMemberStatusEntry], limit: Int) -> String {

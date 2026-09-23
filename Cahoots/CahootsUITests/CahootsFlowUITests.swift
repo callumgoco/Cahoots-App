@@ -43,6 +43,7 @@ final class CahootsFlowUITests: XCTestCase {
         )
 
         app.buttons["today.logWorkout"].tap()
+        XCTAssertTrue(app.buttons["workoutSession.chooseRecord"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(
             format: "label CONTAINS %@",
             "honour system"
@@ -51,6 +52,7 @@ final class CahootsFlowUITests: XCTestCase {
             format: "label CONTAINS %@",
             "short clip for the crew"
         )).firstMatch.exists)
+        app.buttons["workoutSession.chooseRecord"].tap()
         if app.buttons["workoutSession.skipCountdown"].waitForExistence(timeout: 2) {
             waitUntilEnabled(app.buttons["workoutSession.skipCountdown"], timeout: 3)
             app.buttons["workoutSession.skipCountdown"].tap()
@@ -86,7 +88,7 @@ final class CahootsFlowUITests: XCTestCase {
 
         // B4 vote copy
         app.tabBars.buttons["Crew"].tap()
-        XCTAssertTrue(app.buttons["group.voteInProgress"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["group.openVote"].waitForExistence(timeout: 3))
         app.buttons["group.openVote"].tap()
         XCTAssertTrue(app.staticTexts["1 recovery day"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(
@@ -166,6 +168,8 @@ final class CahootsFlowUITests: XCTestCase {
     func testLogWorkoutAndObserveUpdatedPoints() throws {
         let app = launchDemo(additionalArguments: ["-stubWorkoutCapture"])
         app.buttons["today.logWorkout"].tap()
+        XCTAssertTrue(app.buttons["workoutSession.chooseRecord"].waitForExistence(timeout: 3))
+        app.buttons["workoutSession.chooseRecord"].tap()
         XCTAssertTrue(app.buttons["workoutSession.skipCountdown"].waitForExistence(timeout: 3))
         waitUntilEnabled(app.buttons["workoutSession.skipCountdown"], timeout: 3)
         app.buttons["workoutSession.skipCountdown"].tap()
@@ -174,6 +178,22 @@ final class CahootsFlowUITests: XCTestCase {
         XCTAssertTrue(app.buttons["workoutSession.useClip"].waitForExistence(timeout: 3))
         app.buttons["workoutSession.useClip"].tap()
         XCTAssertTrue(app.textFields["checkIn.amount"].waitForExistence(timeout: 3))
+        app.buttons["checkIn.submit"].tap()
+        XCTAssertTrue(app.staticTexts["+100"].waitForExistence(timeout: 4))
+        app.buttons["checkIn.done"].tap()
+        XCTAssertTrue(app.staticTexts["100 points earned"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    func testSkipRecordingGoesStraightToAmount() throws {
+        let app = launchDemo(additionalArguments: ["-stubWorkoutCapture"])
+        app.buttons["today.logWorkout"].tap()
+        XCTAssertTrue(app.buttons["workoutSession.skipRecording"].waitForExistence(timeout: 3))
+        app.buttons["workoutSession.skipRecording"].tap()
+        XCTAssertTrue(app.textFields["checkIn.amount"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["workoutSession.start"].exists)
+        XCTAssertFalse(app.buttons["workoutSession.skipCountdown"].exists)
+        XCTAssertTrue(app.buttons["checkIn.submit"].isEnabled)
         app.buttons["checkIn.submit"].tap()
         XCTAssertTrue(app.staticTexts["+100"].waitForExistence(timeout: 4))
         app.buttons["checkIn.done"].tap()
@@ -229,9 +249,17 @@ final class CahootsFlowUITests: XCTestCase {
             "Expected switcher to show Lunch Break Club, got: \(app.buttons["group.switcher"].label)"
         )
         app.tabBars.buttons["Crew"].tap()
-        let header = app.staticTexts["group.header.name"]
-        XCTAssertTrue(header.waitForExistence(timeout: 3))
-        XCTAssertEqual(header.label, "Lunch Break Club")
+        let switcher = app.buttons["group.header.switcher"]
+        if switcher.waitForExistence(timeout: 3) {
+            XCTAssertTrue(
+                switcher.label.contains("Lunch Break Club"),
+                "Expected crew header switcher to show Lunch Break Club, got: \(switcher.label)"
+            )
+        } else {
+            let header = app.staticTexts["group.header.name"]
+            XCTAssertTrue(header.waitForExistence(timeout: 3))
+            XCTAssertEqual(header.label, "Lunch Break Club")
+        }
     }
 
     @MainActor
@@ -295,7 +323,7 @@ final class CahootsFlowUITests: XCTestCase {
     @MainActor
     private func launchDemo(empty: Bool = false, additionalArguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-skipOnboarding", "-resetDemo", "-ephemeralData", "-suppressNotificationPrimer"] + (empty ? ["-emptyDemo"] : []) + additionalArguments
+        app.launchArguments = ["-skipOnboarding", "-resetDemo", "-ephemeralData", "-suppressNotificationPrimer", "-entitlement plus"] + (empty ? ["-emptyDemo"] : []) + additionalArguments
         app.launch()
         if empty {
             XCTAssertTrue(app.navigationBars["Cahoots"].waitForExistence(timeout: 5))

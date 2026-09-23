@@ -31,7 +31,11 @@ final class AppStore {
     var pendingAppleNonce: String?
     var boundaryTask: Task<Void, Never>?
     var foregroundSyncTask: Task<Void, Never>?
+    var notificationPrimerTask: Task<Void, Never>?
     var isDeletingAccount = false
+    var paywallContext: PaywallContext?
+    var cachedEntitlement: Entitlement = .free
+    var pendingPaywallContinue: PendingPaywallContinue?
 
     init(environment: AppEnvironment) {
         self.environment = environment

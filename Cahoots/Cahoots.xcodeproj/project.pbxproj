@@ -30,9 +30,22 @@
 		ECAF6A703025F795000DB486 /* Configuration.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Configuration.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		ECAF6A803025F795000DB486 /* Exceptions for "Cahoots" folder in "Cahoots" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Configuration/Cahoots.storekit,
+			);
+			target = ECAF6A373025F794000DB486 /* Cahoots */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		ECAF6A3A3025F794000DB486 /* Cahoots */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				ECAF6A803025F795000DB486 /* Exceptions for "Cahoots" folder in "Cahoots" target */,
+			);
 			path = Cahoots;
 			sourceTree = "<group>";
 		};

@@ -97,4 +97,4 @@ See [Testing](Documentation/Testing.md) for test launch arguments and the visual
 
 ## Outside this MVP
 
-Public discovery, chat, location, HealthKit proof, automatic Vision rep counting, purchases/StoreKit, photo avatars, and automatic times-per-week allocation are intentionally outside scope. Short private group workout proof clips are in scope. Remaining operator work (identity URLs, AASA hosting, APNs secrets, device certification) is listed in [Known limitations](Documentation/KnownLimitations.md).
+Public discovery, chat, location, HealthKit proof, automatic Vision rep counting, photo avatars, and automatic times-per-week allocation are intentionally outside scope. Short private group workout proof clips are in scope. **Cahoots Plus** (StoreKit multi-crew unlock) is implemented in-app; App Store Connect products and entitlement Edge Function secrets remain operator setup — see [Monetization](Documentation/Monetization.md). Remaining operator work (identity URLs, AASA hosting, APNs secrets, device certification) is listed in [Known limitations](Documentation/KnownLimitations.md).

@@ -24,10 +24,24 @@ struct AppEnvironment {
             authService = nil
         }
         let clock = SystemAppClock()
+        let arguments = ProcessInfo.processInfo.arguments
+        let entitlements: any EntitlementService = {
+            if arguments.contains("-entitlement plus") {
+                return PlusEntitlementService()
+            }
+            if arguments.contains("-entitlement free") {
+                return FreeEntitlementService()
+            }
+            if authService == nil {
+                // Demo mode: keep multi-crew flows unlocked.
+                return PlusEntitlementService()
+            }
+            return StoreKitEntitlementService()
+        }()
         return AppEnvironment(
             repository: repository,
             notifications: NotificationService(),
-            entitlements: FreeEntitlementService(),
+            entitlements: entitlements,
             network: NetworkMonitor(),
             keychain: keychain,
             authService: authService,

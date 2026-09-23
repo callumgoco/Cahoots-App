@@ -79,7 +79,6 @@ struct JoinGroupView: View {
                     Button("Cancel") { dismiss() }.disabled(isJoining)
                 }
             }
-            .keyboardDoneToolbar()
             .onAppear { focused = true }
         }
     }

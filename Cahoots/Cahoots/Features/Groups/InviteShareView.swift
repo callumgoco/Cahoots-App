@@ -28,18 +28,18 @@ struct InviteShareView: View {
                     .frame(maxWidth: .infinity)
                 }
                 AdaptiveStack(spacing: AppSpacing.small) {
+                    ShareLink(item: link, subject: Text("Join \(group.name) on \(AppIdentity.name)"), message: Text("Use code \(invite.code) to join our private workout challenge.")) {
+                        Label("Share invite", systemImage: "square.and.arrow.up")
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
                     Button(copied ? "Copied" : "Copy code", systemImage: copied ? "checkmark" : "doc.on.doc") {
                         UIPasteboard.general.string = invite.code
                         copied = true
                     }
                     .buttonStyle(SecondaryButtonStyle())
-                    ShareLink(item: link, subject: Text("Join \(group.name) on \(AppIdentity.name)"), message: Text("Use code \(invite.code) to join our private workout challenge.")) {
-                        Label("Share", systemImage: "square.and.arrow.up")
-                    }
-                    .buttonStyle(PrimaryButtonStyle())
                 }
                 Button("Done", action: done)
-                    .buttonStyle(PrimaryButtonStyle())
+                    .buttonStyle(SecondaryButtonStyle())
                     .accessibilityIdentifier("invite.done")
                     .padding(.top, AppSpacing.small)
             }

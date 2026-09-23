@@ -1,6 +1,7 @@
 import Foundation
 
 enum WorkoutSessionPhase: Equatable {
+    case choose
     case prep
     case countdown(Int)
     case record

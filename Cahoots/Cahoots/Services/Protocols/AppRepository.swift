@@ -12,10 +12,12 @@ protocol AppRepository {
     func uploadClip(ticket: ClipUploadTicket, fileURL: URL) async throws
     func requestClipDownloadURL(clipID: UUID) async throws -> ClipDownloadTicket
     func clearLocalOfflineState() async throws
+    func syncEntitlement(signedTransaction: String) async throws -> Entitlement
 }
 
 extension AppRepository {
     func clearLocalOfflineState() async throws {}
+    func syncEntitlement(signedTransaction: String) async throws -> Entitlement { .plus }
 }
 
 struct ClipUploadTicket: Sendable {
@@ -45,14 +47,6 @@ enum SubmissionSyncResult: Hashable, Sendable {
     case authenticationRequired(uploadedClips: [WorkoutClip] = [])
 }
 
-protocol EntitlementService: Sendable {
-    func currentEntitlement() async -> Entitlement
-}
-
-struct FreeEntitlementService: EntitlementService {
-    func currentEntitlement() async -> Entitlement { .free }
-}
-
 enum RepositoryError: LocalizedError {
     case invalidConfiguration
     case authenticationRequired
@@ -78,6 +72,7 @@ enum RepositoryError: LocalizedError {
         case "not_allowed": "You do not have permission to do that."
         case "not_authenticated": "Your session has expired. Please sign in again."
         case "rate_limited": "Too many attempts. Wait a moment and try again."
+        case "plus_required": "Free includes one crew. Upgrade to Plus to join or create another."
         default: message
         }
     }

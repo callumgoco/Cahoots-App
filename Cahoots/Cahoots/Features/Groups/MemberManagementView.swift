@@ -47,54 +47,50 @@ struct MemberManagementView: View {
                     }
                 }
 
-                CahootsSettingsSection("") {
-                    Button("Leave group", role: .destructive) { confirmLeave = true }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .frame(minHeight: 44)
-                    Text("Owners must transfer ownership before leaving a group with other members.")
-                        .font(.caption)
-                        .foregroundStyle(AppColors.secondaryInk)
+                if store.currentMembership?.role == .member {
+                    CahootsSettingsSection("") {
+                        Button("Leave group", role: .destructive) { confirmLeave = true }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .frame(minHeight: 44)
+                        Text("You will lose access to this group’s rounds and activity.")
+                            .font(.caption)
+                            .foregroundStyle(AppColors.secondaryInk)
+                    }
                 }
             }
             .padding(AppSpacing.page)
-            .padding(.bottom, 24)
+            .cahootsTabBarClearance()
         }
         .roundPage()
         .navigationTitle("Members")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Close") {
-                    dismiss()
-                }
-            }
-        }
+        .cahootsDrillInBar()
         .sheet(item: $reportUser) { ReportMemberView(user: $0) }
-        .confirmationDialog("Transfer ownership to \(transferUser?.displayName ?? "this member")?", isPresented: Binding(
+        .alert("Transfer ownership to \(transferUser?.displayName ?? "this member")?", isPresented: Binding(
             get: { transferUser != nil }, set: { if !$0 { transferUser = nil } }
-        ), titleVisibility: .visible) {
+        )) {
             Button("Transfer ownership") {
                 if let transferUser { Task { await store.transferOwnership(to: transferUser.id); self.transferUser = nil } }
             }
             Button("Cancel", role: .cancel) { transferUser = nil }
         } message: { Text("You will become an admin and the new owner will control group roles and settings.") }
-        .confirmationDialog("Remove \(removeUser?.displayName ?? "this member")?", isPresented: Binding(
+        .alert("Remove \(removeUser?.displayName ?? "this member")?", isPresented: Binding(
             get: { removeUser != nil }, set: { if !$0 { removeUser = nil } }
-        ), titleVisibility: .visible) {
+        )) {
             Button("Remove from group", role: .destructive) {
                 if let user = removeUser { Task { await store.removeMember(user.id); removeUser = nil } }
             }
             Button("Cancel", role: .cancel) { removeUser = nil }
         } message: { Text("They will lose access to this group and its current round.") }
-        .confirmationDialog("Block \(blockUser?.displayName ?? "this member")?", isPresented: Binding(
+        .alert("Block \(blockUser?.displayName ?? "this member")?", isPresented: Binding(
             get: { blockUser != nil }, set: { if !$0 { blockUser = nil } }
-        ), titleVisibility: .visible) {
+        )) {
             Button("Block member", role: .destructive) {
                 if let user = blockUser { Task { await store.block(user); blockUser = nil } }
             }
             Button("Cancel", role: .cancel) { blockUser = nil }
         } message: { Text("Their activity will be hidden. You can unblock them later in Safety & privacy.") }
-        .confirmationDialog("Leave this group?", isPresented: $confirmLeave, titleVisibility: .visible) {
+        .alert("Leave this group?", isPresented: $confirmLeave) {
             Button("Leave group", role: .destructive) { Task { if await store.leaveCurrentGroup() { dismiss() } } }
             Button("Cancel", role: .cancel) {}
         } message: { Text("You will lose access to this group’s rounds and activity.") }

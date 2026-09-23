@@ -27,4 +27,6 @@ xcodebuild -project Cahoots.xcodeproj -scheme Cahoots -destination 'platform=iOS
 
 Before TestFlight, repeat the principal flows on compact and Pro Max iPhones in light/dark mode, accessibility text sizes, Increased Contrast, Reduce Motion, and VoiceOver. Physical-device certification must cover local notifications, background retry, Keychain, Sign in with Apple, haptics, universal links, timezone changes, and Release provisioning.
 
+Workout clip camera (physical iPhone only — simulator uses the stub): open Log workout, wait briefly on the choose screen, tap Record, and confirm the preview is already live or appears within about a second instead of a multi-second “Setting up camera…” hold. Also check cold Record (tap immediately), Skip then reopen and Record again, flip camera, and save a clip of at least two seconds.
+
 The existing visual reference captures are stored under `Documentation/QA-*.png`; regenerate them after material UI changes.

@@ -23,12 +23,14 @@ struct VotingView: View {
                     memberStatus(proposal)
                 }
                 .padding(AppSpacing.page)
+                .cahootsTabBarClearance()
             } else {
                 ContentUnavailableView("Proposal unavailable", systemImage: "doc.questionmark", description: Text("It may have been removed or replaced."))
             }
         }
         .navigationTitle("Group vote")
         .navigationBarTitleDisplayMode(.inline)
+        .cahootsDrillInBar()
         .roundPage()
         .safeAreaInset(edge: .bottom) {
             if let proposal,
@@ -95,8 +97,7 @@ struct VotingView: View {
                 AdaptiveStack(spacing: AppSpacing.small) {
                     Text("\(accepts)").font(AppTypography.heroMetric)
                     Text("of \(needed) accepts needed to pass").font(.headline)
-                    Spacer()
-                    Text("\(votes.count) of \(proposal.eligibleVoterIDs.count) voted").font(.caption.bold()).foregroundStyle(AppColors.secondaryInk)
+                    Spacer(minLength: 0)
                 }
                 ProgressView(value: Double(votes.count), total: Double(max(1, proposal.eligibleVoterIDs.count))).tint(AppColors.accent)
                 if let outstandingSummary {
@@ -104,6 +105,10 @@ struct VotingView: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(AppColors.ink)
                         .accessibilityIdentifier("vote.outstandingSummary")
+                } else {
+                    Text("\(votes.count) of \(proposal.eligibleVoterIDs.count) voted")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AppColors.secondaryInk)
                 }
                 Text("A tie fails. Voting also closes early after every eligible member votes.").font(.caption).foregroundStyle(AppColors.secondaryInk)
             }

@@ -9,6 +9,9 @@ struct GroupView: View {
     @State private var path = NavigationPath()
     @State private var showBuilder = false
     @State private var showVote = ProcessInfo.processInfo.arguments.contains("-showVote")
+    @State private var showGroupSwitcher = false
+    @State private var showCreateGroup = false
+    @State private var showJoinGroup = false
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -25,18 +28,20 @@ struct GroupView: View {
                                 Button("Group settings", systemImage: "gearshape") { path.append(CrewDestination.settings) }
                             }
                         } label: {
-                            Image(systemName: "ellipsis.circle")
-                                .font(.title2)
-                                .foregroundStyle(AppColors.accent)
-                                .frame(minWidth: 44, minHeight: 44)
-                                .contentShape(Rectangle())
+                            Image(systemName: "ellipsis")
+                                .font(.body.bold())
+                                .foregroundStyle(AppColors.ink)
+                                .frame(width: 44, height: 44)
+                                .environment(\.colorScheme, .dark)
+                                .background(AppColors.raised, in: Circle())
+                                .shadow(color: AppShadow.color, radius: 8, y: 3)
                         }
                         .accessibilityLabel("Group actions")
                         .accessibilityIdentifier("group.menu")
                     }
                     groupHeader
                     if let challenge = store.currentChallenge, challenge.status == .active {
-                        CrewTodayStatusRail(entries: store.todayMemberStatuses, accessibilityID: "group.todayCrew")
+                        crewShowedUpCard
                     }
                     if let challenge = store.currentChallenge { activeChallengeCard(challenge) }
                     proposeAccessCard
@@ -89,6 +94,11 @@ struct GroupView: View {
             }
             .roundPage()
             .sheet(isPresented: $showBuilder) { ChallengeBuilderView() }
+            .groupSwitcherPresentation(
+                isPresented: $showGroupSwitcher,
+                showCreate: $showCreateGroup,
+                showJoin: $showJoinGroup
+            )
         }
         .id(store.currentGroup?.id)
         .onChange(of: store.selectedTab) { _, newTab in
@@ -124,18 +134,13 @@ struct GroupView: View {
         }
     }
 
+    private var canSwitchGroups: Bool {
+        store.activeGroups.count > 1
+    }
+
     private var groupHeader: some View {
         AdaptiveStack(spacing: AppSpacing.medium) {
-            Text(store.currentGroup?.emoji ?? "⚡️").font(.largeTitle)
-            VStack(alignment: .leading, spacing: AppSpacing.micro) {
-                Text(store.currentGroup?.name ?? "Crew")
-                    .font(.title2.bold())
-                    .foregroundStyle(AppColors.ink)
-                    .accessibilityIdentifier("group.header.name")
-                Text("\(store.groupMembers.count) members · Private")
-                    .font(.subheadline)
-                    .foregroundStyle(AppColors.secondaryInk)
-            }
+            groupIdentity
             Spacer(minLength: 0)
             if store.currentMembership.map({ GroupPermissionRules.canManageInvites($0.role) }) == true {
                 Button("Invite") { path.append(CrewDestination.invite) }
@@ -146,22 +151,48 @@ struct GroupView: View {
     }
 
     @ViewBuilder
-    private var proposeAccessCard: some View {
-        let demoted = store.currentChallenge != nil
-        if let proposal = store.currentProposal {
+    private var groupIdentity: some View {
+        let content = HStack(alignment: .center, spacing: AppSpacing.medium) {
+            Text(store.currentGroup?.emoji ?? "⚡️").font(.largeTitle)
+            VStack(alignment: .leading, spacing: AppSpacing.micro) {
+                HStack(alignment: .center, spacing: AppSpacing.small) {
+                    Text(store.currentGroup?.name ?? "Crew")
+                        .font(.title2.bold())
+                        .foregroundStyle(AppColors.ink)
+                        .accessibilityIdentifier("group.header.name")
+                    if canSwitchGroups {
+                        Image(systemName: "chevron.down")
+                            .font(.caption.bold())
+                            .foregroundStyle(AppColors.secondaryInk)
+                            .accessibilityHidden(true)
+                    }
+                }
+                Text("\(store.groupMembers.count) members · Private")
+                    .font(.subheadline)
+                    .foregroundStyle(AppColors.secondaryInk)
+            }
+        }
+
+        if canSwitchGroups {
             Button {
-                showVote = true
+                showGroupSwitcher = true
             } label: {
-                proposeRow(
-                    demoted: demoted,
-                    symbol: "checkmark.seal.fill",
-                    title: "A vote is already open",
-                    subtitle: proposal.title
-                )
+                content
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityIdentifier("group.voteInProgress")
-        } else if canPropose {
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Switch crew. Current crew \(store.currentGroup?.name ?? "none")")
+            .accessibilityIdentifier("group.header.switcher")
+        } else {
+            content
+        }
+    }
+
+    @ViewBuilder
+    private var proposeAccessCard: some View {
+        let demoted = store.currentChallenge != nil
+        if store.currentProposal == nil, canPropose {
             Button {
                 showBuilder = true
             } label: {
@@ -207,6 +238,35 @@ struct GroupView: View {
                 CahootsCard { content }
             }
         }
+    }
+
+    private var crewShowedUpCard: some View {
+        let entries = store.todayMemberStatuses
+        let showedUp = entries.filter { $0.status == .done || $0.status == .rest }.count
+        let total = entries.count
+        let headline: String = {
+            if total == 0 { return String(localized: "Waiting on the crew") }
+            if showedUp == total { return String(localized: "Everyone showed up") }
+            return String(localized: "\(showedUp) of \(total) showed up")
+        }()
+        let detail = CrewAccountabilityCopy.checkInSummary(entries: entries)
+            ?? String(localized: "Private crew progress for today.")
+
+        return CahootsCard(emphasis: true) {
+            VStack(alignment: .leading, spacing: AppSpacing.small) {
+                Text(String(localized: "Crew today"))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AppColors.onInk.opacity(0.7))
+                Text(headline)
+                    .font(.title2.bold())
+                    .foregroundStyle(AppColors.onInk)
+                Text(detail)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AppColors.onInk.opacity(0.72))
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("group.crewShowedUp")
     }
 
     private func activeChallengeCard(_ challenge: CahootsChallenge) -> some View {

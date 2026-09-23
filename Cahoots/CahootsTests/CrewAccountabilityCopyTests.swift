@@ -13,8 +13,18 @@ struct CrewAccountabilityCopyTests {
             TodayMemberStatusEntry(user: sam, status: .pending, isCurrentUser: false)
         ]
         let summary = CrewAccountabilityCopy.checkInSummary(entries: entries)
-        #expect(summary == "1 of 3 done · Jordan and Sam still need to.")
+        #expect(summary == "1 of 3 done · Jordan and Sam still need to check in.")
         #expect(CrewAccountabilityCopy.stillNeedToCheckIn(entries: entries) == "Still need to: Jordan and Sam.")
+    }
+
+    @Test func checkInSummarySingularPeerNeedsToCheckIn() {
+        let you = makeUser("You", index: 1)
+        let alex = makeUser("Alex Tester", index: 2)
+        let entries = [
+            TodayMemberStatusEntry(user: you, status: .done, isCurrentUser: true),
+            TodayMemberStatusEntry(user: alex, status: .pending, isCurrentUser: false)
+        ]
+        #expect(CrewAccountabilityCopy.checkInSummary(entries: entries) == "1 of 2 done · Alex still needs to check in.")
     }
 
     @Test func checkInSummaryWhenEveryoneIn() {
@@ -37,7 +47,7 @@ struct CrewAccountabilityCopyTests {
             votedUserIDs: [you.id],
             currentUserID: you.id
         )
-        #expect(summary == "1 of 3 voted · Jordan and Sam still need to.")
+        #expect(summary == "1 of 3 voted · Jordan and Sam still need to vote.")
         #expect(!(summary?.localizedCaseInsensitiveContains("accept") ?? true))
         #expect(!(summary?.localizedCaseInsensitiveContains("reject") ?? true))
     }

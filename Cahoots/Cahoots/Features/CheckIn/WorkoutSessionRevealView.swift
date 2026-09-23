@@ -9,62 +9,88 @@ struct WorkoutSessionRevealView: View {
     @ScaledMetric(relativeTo: .largeTitle) private var accessibilityPointsSize: CGFloat = 56
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: AppSpacing.extraLarge) {
-                if let points = controller.submittedPoints {
-                    Text(points > 0 ? "+\(points)" : "Saved")
-                        .font(
-                            .system(
-                                size: dynamicTypeSize.isAccessibilitySize ? accessibilityPointsSize : pointsSize,
-                                weight: .heavy,
-                                design: .rounded
+        ZStack {
+            backdrop
+            ScrollView {
+                VStack(spacing: AppSpacing.large) {
+                    CahootsCard(elevated: true) {
+                        VStack(spacing: AppSpacing.extraLarge) {
+                            if let points = controller.submittedPoints {
+                                Text(points > 0 ? "+\(points)" : "Saved")
+                                    .font(
+                                        .system(
+                                            size: dynamicTypeSize.isAccessibilitySize ? accessibilityPointsSize : pointsSize,
+                                            weight: .heavy,
+                                            design: .rounded
+                                        )
+                                    )
+                                    .monospacedDigit()
+                                    .foregroundStyle(points > 0 ? AppColors.accent : AppColors.ink)
+                                Text(points > 0 ? "points today" : "Progress ready for another check-in")
+                                    .font(.title3.bold())
+                                if let submittedSyncState = controller.submittedSyncState {
+                                    StatusPill(
+                                        text: FriendFacingCopy.syncLabel(for: submittedSyncState),
+                                        kind: submittedSyncState == .synced ? .positive : .warning
+                                    )
+                                }
+                            }
+                            if let previewURL = controller.previewURL, FileManager.default.fileExists(atPath: previewURL.path) {
+                                VideoPlayerRepresentable(url: previewURL)
+                                    .frame(height: 220)
+                                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+                            } else if controller.submittedPoints != nil {
+                                RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
+                                    .fill(AppColors.chip)
+                                    .frame(height: 120)
+                                    .overlay {
+                                        Text("Preview unavailable")
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(AppColors.secondaryInk)
+                                    }
+                                    .accessibilityLabel("Preview unavailable")
+                            }
+                            WorkoutSessionCrewStrip(
+                                store: store,
+                                challenge: store.currentChallenge,
+                                spoilered: false
                             )
-                        )
-                        .monospacedDigit()
-                        .foregroundStyle(points > 0 ? AppColors.accent : AppColors.ink)
-                    Text(points > 0 ? "points today" : "Progress ready for another check-in")
-                        .font(.title3.bold())
-                    if let submittedSyncState = controller.submittedSyncState {
-                        StatusPill(
-                            text: FriendFacingCopy.syncLabel(for: submittedSyncState),
-                            kind: submittedSyncState == .synced ? .positive : .warning
-                        )
+                            if let stillNeed = CrewAccountabilityCopy.stillNeedToCheckIn(entries: store.todayMemberStatuses) {
+                                Text(stillNeed)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(AppColors.secondaryInk)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .accessibilityIdentifier("checkIn.stillNeed")
+                            }
+                            Button("Done", action: onDone)
+                                .buttonStyle(PrimaryButtonStyle())
+                                .accessibilityIdentifier("checkIn.done")
+                        }
                     }
                 }
-                if let previewURL = controller.previewURL, FileManager.default.fileExists(atPath: previewURL.path) {
-                    VideoPlayerRepresentable(url: previewURL)
-                        .frame(height: 220)
-                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
-                } else if controller.submittedPoints != nil {
-                    RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
-                        .fill(AppColors.card)
-                        .frame(height: 120)
-                        .overlay {
-                            Text("Preview unavailable")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(AppColors.secondaryInk)
-                        }
-                        .accessibilityLabel("Preview unavailable")
-                }
-                WorkoutSessionCrewStrip(
-                    store: store,
-                    challenge: store.currentChallenge,
-                    spoilered: false
-                )
-                if let stillNeed = CrewAccountabilityCopy.stillNeedToCheckIn(entries: store.todayMemberStatuses) {
-                    Text(stillNeed)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(AppColors.secondaryInk)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .accessibilityIdentifier("checkIn.stillNeed")
-                }
-                Button("Done", action: onDone)
-                    .buttonStyle(PrimaryButtonStyle())
-                    .accessibilityIdentifier("checkIn.done")
+                .padding(AppSpacing.page)
+                .padding(.vertical, AppSpacing.large)
             }
-            .padding(AppSpacing.page)
         }
-        .roundPage()
+    }
+
+    private var backdrop: some View {
+        ZStack {
+            AppColors.page.ignoresSafeArea()
+            if let previewURL = controller.previewURL, FileManager.default.fileExists(atPath: previewURL.path) {
+                VideoPlayerRepresentable(url: previewURL)
+                    .ignoresSafeArea()
+                    .blur(radius: 28)
+                    .opacity(0.45)
+                    .allowsHitTesting(false)
+            }
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .ignoresSafeArea()
+            Color.black.opacity(0.18)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+        }
     }
 }
 
@@ -117,7 +143,7 @@ struct WorkoutSessionCrewStrip: View {
         }
         .padding(AppSpacing.medium)
         .environment(\.colorScheme, .dark)
-        .background(AppColors.card, in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+        .background(AppColors.raised, in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
         .foregroundStyle(AppColors.ink)
         .accessibilityIdentifier("workoutSession.crewStrip")
     }

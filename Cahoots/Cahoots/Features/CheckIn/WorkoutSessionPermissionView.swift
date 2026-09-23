@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 
 struct WorkoutSessionPermissionView: View {
+    @Bindable var controller: WorkoutSessionController
     @Environment(\.openURL) private var openURL
 
     var body: some View {
@@ -12,7 +13,7 @@ struct WorkoutSessionPermissionView: View {
                 .accessibilityHidden(true)
             Text("Camera required")
                 .font(.title2.bold())
-            Text("A short proof clip is required to unlock the crew feed. Honour-system-only check-ins are not available.")
+            Text("Camera access is needed to film a clip for the crew. You can still skip recording and enter today’s amount.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(AppColors.secondaryInk)
             Button("Open Settings") {
@@ -22,6 +23,12 @@ struct WorkoutSessionPermissionView: View {
             }
             .buttonStyle(PrimaryButtonStyle())
             .accessibilityIdentifier("workoutSession.openSettings")
+            Button("Skip recording") {
+                controller.skipRecording()
+            }
+            .buttonStyle(SecondaryButtonStyle())
+            .disabled(!controller.openedWhileWindowOpen)
+            .accessibilityIdentifier("workoutSession.skipRecording")
             Spacer()
         }
         .padding(AppSpacing.page)

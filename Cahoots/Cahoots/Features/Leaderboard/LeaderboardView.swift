@@ -29,18 +29,21 @@ struct LeaderboardView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(spacing: AppSpacing.large) {
-                    HStack(alignment: .center, spacing: AppSpacing.small) {
+                    AdaptiveStack(spacing: AppSpacing.small) {
                         Text("Leaderboard")
                             .font(.largeTitle.bold())
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                             .accessibilityAddTraits(.isHeader)
                         Spacer(minLength: AppSpacing.small)
                         GroupSwitcherMenu()
+                            .layoutPriority(-1)
                     }
 
                     CrewStandingsSection()
                 }
                 .padding(AppSpacing.page)
-                .padding(.bottom, 24)
+                .cahootsTabBarClearance()
             }
             .refreshable { await store.refresh() }
             .navigationTitle("Leaderboard")
@@ -253,35 +256,43 @@ struct PodiumCard: View {
     let rank: Int
     @Environment(AppStore.self) private var store
 
+    private var isFirst: Bool { rank == 1 }
+    /// Explicit ink/onInk for #1 (emphasis). Ranks 2–3 use charcoal with light labels —
+    /// do not drive colors via `.environment(\.colorScheme)` because `AppColors` follows the window trait.
+    private var fill: Color { isFirst ? AppColors.ink : AppColors.card }
+    private var label: Color { isFirst ? AppColors.onInk : Color.white }
+    private var secondaryLabel: Color { isFirst ? AppColors.onInk.opacity(0.7) : Color.white.opacity(0.65) }
+
     var body: some View {
         VStack(spacing: AppSpacing.small) {
             ZStack(alignment: .topTrailing) {
-                AvatarView(user: entry.user, size: rank == 1 ? 58 : 48)
+                AvatarView(user: entry.user, size: isFirst ? 58 : 48)
                     .overlay {
                         if entry.user.id == store.currentUser?.id {
-                            Circle().stroke(AppColors.page, lineWidth: 3)
+                            Circle().stroke(fill, lineWidth: 3)
                         }
                     }
                 Text("\(rank)")
                     .font(.caption.bold())
                     .frame(width: 24, height: 24)
-                    .background(AppColors.ink, in: Circle())
-                    .foregroundStyle(AppColors.onInk)
+                    .background(isFirst ? AppColors.onInk : AppColors.ink, in: Circle())
+                    .foregroundStyle(isFirst ? AppColors.ink : AppColors.onInk)
                     .offset(x: 5, y: -4)
             }
             Text(entry.user.id == store.currentUser?.id ? "You" : entry.user.displayName)
                 .font(.subheadline.bold())
+                .foregroundStyle(label)
                 .multilineTextAlignment(.center)
-            Text(entry.points.formatted()).font(.headline.monospacedDigit())
+            Text(entry.points.formatted())
+                .font(.headline.monospacedDigit())
+                .foregroundStyle(label)
             Text("points")
                 .font(.caption2)
-                .foregroundStyle(AppColors.secondaryInk)
+                .foregroundStyle(secondaryLabel)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, rank == 1 ? AppSpacing.large : AppSpacing.medium)
-        .environment(\.colorScheme, .dark)
-        .background(rank == 1 ? AppColors.onInk : AppColors.card, in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
-        .foregroundStyle(AppColors.ink)
+        .padding(.vertical, isFirst ? AppSpacing.large : AppSpacing.medium)
+        .background(fill, in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Rank \(rank), \(entry.user.displayName), \(entry.points) points")
         .accessibilityIdentifier(entry.user.id == store.currentUser?.id ? "leaderboard.currentUser" : "leaderboard.podium.\(rank)")
@@ -383,16 +394,9 @@ struct LeaderboardRow: View {
                     }
                 }
             VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(isCurrentUser ? "You" : entry.user.displayName).font(.subheadline.bold()).fixedSize(horizontal: false, vertical: true)
-                    if isCurrentUser {
-                        Text("YOU")
-                            .font(.caption2.weight(.bold))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(AppColors.page.opacity(0.18), in: Capsule())
-                    }
-                }
+                Text(isCurrentUser ? "You" : entry.user.displayName)
+                    .font(.subheadline.bold())
+                    .fixedSize(horizontal: false, vertical: true)
                 Text("\(entry.completedRequirements) \(entry.completedRequirements == 1 ? "completion" : "completions") · \(entry.currentStreak)-day streak")
                     .font(.caption)
                     .foregroundStyle(AppColors.secondaryInk)
@@ -404,10 +408,17 @@ struct LeaderboardRow: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if let previous = entry.previousRank {
                     let movement = previous - rank
-                    Label(movement == 0 ? "—" : "\(abs(movement))", systemImage: movement > 0 ? "arrow.up" : movement < 0 ? "arrow.down" : "minus")
-                        .font(.caption2.bold())
-                        .foregroundStyle(AppColors.secondaryInk)
-                        .accessibilityLabel(movement == 0 ? "No rank change" : "Moved \(movement > 0 ? "up" : "down") \(abs(movement)) places")
+                    if movement == 0 {
+                        Text("Same")
+                            .font(.caption2.bold())
+                            .foregroundStyle(AppColors.secondaryInk)
+                            .accessibilityLabel("No rank change")
+                    } else {
+                        Label("\(abs(movement))", systemImage: movement > 0 ? "arrow.up" : "arrow.down")
+                            .font(.caption2.bold())
+                            .foregroundStyle(AppColors.secondaryInk)
+                            .accessibilityLabel("Moved \(movement > 0 ? "up" : "down") \(abs(movement)) places")
+                    }
                 }
             }
         }
@@ -472,9 +483,10 @@ struct ChallengeResultsView: View {
                     .buttonStyle(PrimaryButtonStyle())
             }
             .padding(AppSpacing.page)
+            .cahootsTabBarClearance()
         }
         .navigationTitle("Challenge results")
-        .navigationBarTitleDisplayMode(.inline)
+        .cahootsDrillInBar()
         .roundPage()
         .sheet(isPresented: $showBuilder) { ChallengeBuilderView() }
     }

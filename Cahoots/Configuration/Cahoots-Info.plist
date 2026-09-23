@@ -55,10 +55,6 @@
 	<dict>
 		<key>UIColorName</key>
 		<string>LaunchBackground</string>
-		<key>UIImageName</key>
-		<string>BrandMark</string>
-		<key>UIImageRespectsSafeAreaInsets</key>
-		<true/>
 	</dict>
 	<key>UIBackgroundModes</key>
 	<array>

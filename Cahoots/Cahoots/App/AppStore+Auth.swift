@@ -120,6 +120,9 @@ extension AppStore {
         boundaryTask?.cancel()
         foregroundSyncTask?.cancel()
         foregroundSyncTask = nil
+        notificationPrimerTask?.cancel()
+        notificationPrimerTask = nil
+        showNotificationPrimer = false
         await environment.authService?.signOut()
         if environment.authService == nil {
             environment.keychain.removeAll()

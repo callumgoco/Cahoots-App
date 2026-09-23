@@ -44,10 +44,6 @@ struct TodayView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .accessibilityIdentifier("today.clipUnlockHint")
                         }
-                        captionRow(challenge)
-                        if state(for: challenge) == .scheduledIncomplete {
-                            checkInBar
-                        }
                         revealedPeerDetailStrip
                         pendingSyncCard
                     } else {
@@ -55,7 +51,20 @@ struct TodayView: View {
                     }
                 }
                 .padding(AppSpacing.page)
-                .padding(.bottom, 24)
+                .padding(.bottom, showsStickyCheckIn ? 100 : 24)
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if showsStickyCheckIn {
+                    checkInBar
+                        .padding(.horizontal, AppSpacing.page)
+                        .padding(.top, AppSpacing.small)
+                        .padding(.bottom, AppSpacing.small)
+                        .background(
+                            AppColors.page
+                                .shadow(color: AppColors.ink.opacity(0.06), radius: 16, y: -8)
+                                .mask(Rectangle().padding(.top, -24))
+                        )
+                }
             }
             .refreshable { await store.refresh() }
             .navigationTitle("Today")
@@ -74,7 +83,7 @@ struct TodayView: View {
             .onChange(of: store.presentWorkoutSession) { _, shouldPresent in
                 if shouldPresent { showCheckIn = true }
             }
-            .confirmationDialog("Use a recovery day?", isPresented: $confirmRecovery, titleVisibility: .visible) {
+            .alert("Use a recovery day?", isPresented: $confirmRecovery) {
                 Button("Use recovery day") { Task { await store.useRecoveryDay() } }
                 Button("Cancel", role: .cancel) {}
             } message: {
@@ -83,6 +92,11 @@ struct TodayView: View {
             .roundPage()
         }
         .id(store.currentGroup?.id)
+    }
+
+    private var showsStickyCheckIn: Bool {
+        guard let challenge = store.currentChallenge else { return false }
+        return state(for: challenge) == .scheduledIncomplete
     }
 
     private var emptyChallengeState: some View {
@@ -228,10 +242,32 @@ struct TodayView: View {
                         .foregroundStyle(AppColors.secondaryInk)
                     rejectionStrip
                 }
+
+                MetricShelf(items: metricShelfItems(for: challenge, state: requirementState))
             }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilitySummary(challenge, state: requirementState))
+    }
+
+    private func metricShelfItems(for challenge: CahootsChallenge, state: TodayRequirementState) -> [MetricShelfItem] {
+        let streak = currentEntry?.currentStreak ?? 0
+        let rank = store.currentRank.map { "#\($0)" } ?? "—"
+        let third: MetricShelfItem
+        if state == .complete {
+            third = MetricShelfItem(id: "points", value: "\(store.todayPoints)", caption: String(localized: "points"))
+        } else {
+            third = MetricShelfItem(
+                id: "recovery",
+                value: "\(store.remainingRecoveryDays)",
+                caption: String(localized: "recovery left")
+            )
+        }
+        return [
+            MetricShelfItem(id: "rank", value: rank, caption: String(localized: "rank")),
+            MetricShelfItem(id: "streak", value: "\(streak)", caption: String(localized: "day streak")),
+            third,
+        ]
     }
 
     private func heroMetric(amount: Double, unit: String, label: String) -> some View {
@@ -360,22 +396,6 @@ struct TodayView: View {
         } else {
             clipUnlockHint = String(localized: "\(firstName) posted — log yours to see it.")
         }
-    }
-
-    private func captionRow(_ challenge: CahootsChallenge) -> some View {
-        let streak = currentEntry?.currentStreak ?? 0
-        let rank = store.currentRank.map { "#\($0)" } ?? "—"
-        return VStack(alignment: .leading, spacing: AppSpacing.micro) {
-            Text("Rank \(rank)")
-                .font(.headline.weight(.bold))
-                .foregroundStyle(AppColors.ink)
-            Text("\(streak)-day streak · \(challenge.title)")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(AppColors.secondaryInk)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(streak) day streak, rank \(rank), \(challenge.title)")
     }
 
     private static func formatCountdown(_ interval: TimeInterval) -> String {

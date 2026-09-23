@@ -76,12 +76,22 @@ struct WorkoutSessionPrepView: View {
                 }
 
                 Button("Start") { controller.beginCountdown(reduceMotion: reduceMotion) }
-                    .buttonStyle(PrimaryButtonStyle())
+                    .font(.headline)
+                    .foregroundStyle(.white.opacity(controller.canStartCaptureActions ? 1 : 0.7))
+                    .frame(maxWidth: .infinity, minHeight: 54)
+                    .background(
+                        Capsule()
+                            .fill(Color.white.opacity(controller.canStartCaptureActions ? 0.32 : 0.18))
+                    )
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(Color.white.opacity(controller.canStartCaptureActions ? 0.85 : 0.45), lineWidth: 1.5)
+                    )
                     .disabled(!controller.canStartCaptureActions)
                     .accessibilityIdentifier("workoutSession.start")
                 Button("Skip countdown") { controller.beginAutoRecording() }
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .foregroundStyle(.white.opacity(0.9))
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .disabled(!controller.canStartCaptureActions)
                     .accessibilityIdentifier("workoutSession.skipCountdown")
@@ -100,17 +110,14 @@ struct WorkoutSessionPrepView: View {
     }
 
     private var flipCameraButton: some View {
-        Button {
+        CircularIconButton(
+            systemName: "camera.rotate.fill",
+            style: .material,
+            accessibilityLabel: String(localized: "Flip camera"),
+            accessibilityIdentifier: "workoutSession.flip"
+        ) {
             Task { await controller.flipCamera() }
-        } label: {
-            Image(systemName: "camera.rotate.fill")
-                .font(.title3.bold())
-                .foregroundStyle(.white)
-                .frame(minWidth: 44, minHeight: 44)
-                .background(.ultraThinMaterial, in: Circle())
         }
-        .accessibilityLabel("Flip camera")
-        .accessibilityIdentifier("workoutSession.flip")
     }
 }
 

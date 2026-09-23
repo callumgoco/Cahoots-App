@@ -19,16 +19,31 @@ struct GroupSettingsView: View {
         ScrollView {
             LazyVStack(spacing: AppSpacing.large) {
                 CahootsSettingsSection("Group") {
-                    TextField("Name", text: $name)
-                        .frame(minHeight: 44)
-                    Divider()
-                    TextField("Emoji", text: $emoji)
-                        .frame(minHeight: 44)
-                    Divider()
-                    Stepper("Up to \(memberLimit) people", value: $memberLimit, in: activeMemberCount...20)
-                        .frame(minHeight: 44)
+                    if isOwner {
+                        TextField("Name", text: $name)
+                            .frame(minHeight: 44)
+                        Divider()
+                        TextField("Emoji", text: $emoji)
+                            .frame(minHeight: 44)
+                        Divider()
+                        Stepper("Up to \(memberLimit) people", value: $memberLimit, in: activeMemberCount...20)
+                            .frame(minHeight: 44)
+                    } else {
+                        LabeledContent("Name", value: name)
+                            .frame(minHeight: 44)
+                        Divider()
+                        LabeledContent("Emoji", value: emoji)
+                            .frame(minHeight: 44)
+                        Divider()
+                        LabeledContent("Member limit", value: "Up to \(memberLimit) people")
+                            .frame(minHeight: 44)
+                        Divider()
+                        Text("Only the owner can edit this.")
+                            .font(.caption)
+                            .foregroundStyle(AppColors.secondaryInk)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
-                .disabled(!isOwner)
 
                 CahootsSettingsSection("Invitation") {
                     if let invite = replacementInvite ?? currentInvite {
@@ -75,14 +90,14 @@ struct GroupSettingsView: View {
                 }
             }
             .padding(AppSpacing.page)
-            .padding(.bottom, 24)
+            .cahootsTabBarClearance()
         }
         .roundPage()
         .interactiveKeyboardDismiss()
         .navigationTitle("Group settings")
         .navigationBarTitleDisplayMode(.inline)
+        .cahootsDrillInBar()
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
             if isOwner {
                 ToolbarItem(placement: .confirmationAction) {
                     if isSaving {
@@ -104,19 +119,19 @@ struct GroupSettingsView: View {
         }
         .interactiveDismissDisabled(isSaving)
         .keyboardDoneToolbar()
-        .confirmationDialog("Revoke this invitation?", isPresented: $confirmRevoke, titleVisibility: .visible) {
+        .alert("Revoke this invitation?", isPresented: $confirmRevoke) {
             Button("Revoke", role: .destructive) { Task { await store.revokeCurrentInvite() } }
             Button("Cancel", role: .cancel) {}
         }
-        .confirmationDialog("Generate a new invitation?", isPresented: $confirmRegenerate, titleVisibility: .visible) {
+        .alert("Generate a new invitation?", isPresented: $confirmRegenerate) {
             Button("Generate new invitation") { Task { replacementInvite = await store.regenerateCurrentInvite() } }
             Button("Cancel", role: .cancel) {}
         } message: { Text("The previous code and QR link will stop working immediately.") }
-        .confirmationDialog("Leave this group?", isPresented: $confirmLeave, titleVisibility: .visible) {
+        .alert("Leave this group?", isPresented: $confirmLeave) {
             Button("Leave group", role: .destructive) { Task { if await store.leaveCurrentGroup() { dismiss() } } }
             Button("Cancel", role: .cancel) {}
         } message: { Text("You will lose access to this group’s rounds and activity.") }
-        .confirmationDialog("Delete this group?", isPresented: $confirmDelete, titleVisibility: .visible) {
+        .alert("Delete this group?", isPresented: $confirmDelete) {
             Button("Delete group", role: .destructive) { Task { if await store.deleteCurrentGroup() { dismiss() } } }
             Button("Cancel", role: .cancel) {}
         } message: { Text("All members will lose access. Rounds, votes, and activity for this group will be permanently removed.") }

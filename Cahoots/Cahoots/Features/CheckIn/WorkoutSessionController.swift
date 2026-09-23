@@ -4,7 +4,7 @@ import Observation
 @MainActor
 @Observable
 final class WorkoutSessionController {
-    var phase: WorkoutSessionPhase = .prep
+    var phase: WorkoutSessionPhase = .choose
     var capture: (any WorkoutCapturing)?
     var isCaptureReady = false
     var isActivelyRecording = false
@@ -21,8 +21,15 @@ final class WorkoutSessionController {
     var captureError: String?
     var sessionRequirementDate: Date?
     var openedWhileWindowOpen = false
+    /// True when a start clip is already saved and Record should open the finish-clip step.
+    var hasPendingStartClip = false
+    /// Override in unit tests to inject a capture double.
+    var captureFactory: () -> any WorkoutCapturing = { WorkoutCaptureController.make() }
 
     private var recordingTimer: Timer?
+    /// In-flight camera warm-up so Record can reuse a session started during bootstrap.
+    private var prepareTask: Task<Void, Never>?
+    private var prepareGeneration = 0
 
     var canStartCaptureActions: Bool {
         openedWhileWindowOpen && isCaptureReady
@@ -67,11 +74,13 @@ final class WorkoutSessionController {
         let now = store.environment.clock.now
         if let userID = store.currentUser?.id,
            let pending = PendingWorkoutSessionStore.load(challengeID: challenge.id, userID: userID) {
-            recordedClips = [pending.startClip]
+            recordedClips = []
             currentKind = .finish
             sessionRequirementDate = pending.requirementDate
             openedWhileWindowOpen = true
-            phase = .waitingForFinish
+            hasPendingStartClip = true
+            phase = .choose
+            beginCameraWarmUpIfNeeded()
             return
         }
         sessionRequirementDate = ScheduleEngine.requirementDay(for: now, challenge: challenge) ?? now
@@ -80,11 +89,42 @@ final class WorkoutSessionController {
             formError = CheckInSubmissionRules.closedWindowMessage
         }
         currentKind = challenge.measurementType.requiresTwoClips ? .start : .set
+        hasPendingStartClip = false
+        phase = .choose
+        beginCameraWarmUpIfNeeded()
+    }
+
+    /// Continues into the camera flow, or the finish-clip step when a start clip is already saved.
+    func chooseRecord(store: AppStore) {
+        guard openedWhileWindowOpen else { return }
+        formError = nil
+        if hasPendingStartClip,
+           let challenge = store.currentChallenge,
+           let userID = store.currentUser?.id,
+           let pending = PendingWorkoutSessionStore.load(challengeID: challenge.id, userID: userID) {
+            recordedClips = [pending.startClip]
+            currentKind = .finish
+            sessionRequirementDate = pending.requirementDate
+            phase = .waitingForFinish
+            return
+        }
+        currentKind = store.currentChallenge?.measurementType.requiresTwoClips == true ? .start : .set
         phase = .prep
         Task { await prepareCapture() }
     }
 
+    /// Opens the amount screen with no clips. A saved start clip stays on disk until submit or Record.
+    func skipRecording() {
+        guard openedWhileWindowOpen else { return }
+        formError = nil
+        recordedClips = []
+        tearDown()
+        phase = .confirm
+    }
+
     func tearDown() {
+        prepareTask?.cancel()
+        prepareTask = nil
         recordingTimer?.invalidate()
         recordingTimer = nil
         isCaptureReady = false
@@ -93,20 +133,56 @@ final class WorkoutSessionController {
         capture = nil
     }
 
+    /// Starts camera warm-up while the user is still on the choose screen.
+    func beginCameraWarmUpIfNeeded() {
+        guard openedWhileWindowOpen, !isCaptureReady else { return }
+        Task { await prepareCapture() }
+    }
+
     func prepareCapture() async {
+        if isCaptureReady, capture != nil { return }
+        if let inFlight = prepareTask {
+            await inFlight.value
+            if isCaptureReady, capture != nil { return }
+        }
+
+        prepareGeneration += 1
+        let generation = prepareGeneration
+        let work = Task { @MainActor in
+            await self.performPrepare()
+        }
+        prepareTask = work
+        await work.value
+        if prepareGeneration == generation {
+            prepareTask = nil
+        }
+    }
+
+    private func performPrepare() async {
         isCaptureReady = false
-        capture?.tearDown()
-        capture = nil
-        let controller = WorkoutCaptureController.make()
-        capture = controller
+        captureError = nil
+
+        let controller: any WorkoutCapturing
+        if let existing = capture {
+            controller = existing
+        } else {
+            controller = captureFactory()
+            capture = controller
+        }
+
         do {
             try await controller.prepare()
+            guard !Task.isCancelled else { return }
             captureError = nil
             isCaptureReady = true
         } catch WorkoutCaptureError.permissionDenied {
+            guard !Task.isCancelled else { return }
             isCaptureReady = false
-            phase = .permissionDenied
+            if phase == .prep || phase == .choose {
+                phase = .permissionDenied
+            }
         } catch {
+            guard !Task.isCancelled else { return }
             isCaptureReady = false
             captureError = error.localizedDescription
         }
@@ -249,9 +325,11 @@ final class WorkoutSessionController {
             store.notePendingWorkoutSessionChanged()
         }
         recordedClips = []
+        hasPendingStartClip = false
         currentKind = store.currentChallenge?.measurementType.requiresTwoClips == true ? .start : .set
-        phase = .prep
-        Task { await prepareCapture() }
+        tearDown()
+        phase = .choose
+        beginCameraWarmUpIfNeeded()
     }
 
     func requestSubmit(store: AppStore) {

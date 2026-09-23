@@ -30,7 +30,7 @@ struct WorkoutSessionView: View {
         .interactiveDismissDisabled(controller.isSubmitting || controller.isActivelyRecording || controller.submittedPoints != nil)
         .onAppear { controller.bootstrap(store: store) }
         .onDisappear { controller.tearDown() }
-        .confirmationDialog("That’s much higher than the target", isPresented: $controller.showHighConfirmation, titleVisibility: .visible) {
+        .alert("That’s much higher than the target", isPresented: $controller.showHighConfirmation) {
             Button("Submit anyway") { Task { await controller.submit(store: store) } }
             Button("Review amount", role: .cancel) {}
         } message: {
@@ -55,6 +55,8 @@ struct WorkoutSessionView: View {
     @ViewBuilder
     private var phaseContent: some View {
         switch controller.phase {
+        case .choose:
+            WorkoutSessionChooseView(controller: controller, store: store)
         case .prep:
             WorkoutSessionPrepView(controller: controller, store: store, reduceMotion: reduceMotion)
         case .countdown(let value):
@@ -68,7 +70,7 @@ struct WorkoutSessionView: View {
         case .reveal:
             WorkoutSessionRevealView(controller: controller, store: store, onDone: close)
         case .permissionDenied:
-            WorkoutSessionPermissionView()
+            WorkoutSessionPermissionView(controller: controller)
         }
     }
 

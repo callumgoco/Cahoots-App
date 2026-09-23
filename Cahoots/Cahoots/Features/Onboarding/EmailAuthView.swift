@@ -15,6 +15,8 @@ struct EmailAuthView: View {
     @State private var displayName = ""
     @State private var showPassword = false
     @State private var isWorking = false
+    @State private var keyboardHeight: CGFloat = 0
+    @State private var footerHeight: CGFloat = 0
     @FocusState private var field: Field?
 
     private enum Field: Hashable {
@@ -28,8 +30,64 @@ struct EmailAuthView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: AppSpacing.extraLarge) {
+            VStack(spacing: 0) {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        form
+                            .padding(.bottom, contentClearance)
+                    }
+                    .interactiveKeyboardDismiss()
+                    .onChange(of: field) { _, focused in
+                        reveal(focused, with: proxy)
+                    }
+                    .onChange(of: keyboardHeight) { _, _ in
+                        reveal(field, with: proxy)
+                    }
+                }
+                footer
+            }
+            .ignoresSafeArea(.keyboard)
+            .background {
+                KeyboardHeightReader(height: $keyboardHeight)
+            }
+            .roundPage()
+            .navigationTitle(navigationTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        store.errorBanner = nil
+                        dismiss()
+                    }
+                }
+            }
+            .keyboardDoneToolbar()
+            .onAppear {
+                store.errorBanner = nil
+                field = mode == .signUp ? .displayName : .email
+            }
+            .onChange(of: store.noticeBanner) { _, notice in
+                if mode == .resetPassword, notice != nil { dismiss() }
+            }
+        }
+    }
+
+    /// Room to scroll the focused field above the keyboard while the footer stays at the screen bottom.
+    private var contentClearance: CGFloat {
+        max(0, keyboardHeight - footerHeight)
+    }
+
+    private func reveal(_ focused: Field?, with proxy: ScrollViewProxy) {
+        guard keyboardHeight > 0, let focused else { return }
+        DispatchQueue.main.async {
+            withAnimation(AppMotion.calm) {
+                proxy.scrollTo(focused, anchor: UnitPoint(x: 0.5, y: 0.15))
+            }
+        }
+    }
+
+    private var form: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.extraLarge) {
                     VStack(alignment: .leading, spacing: AppSpacing.small) {
                         Text(title)
                             .font(.system(.largeTitle, design: .rounded, weight: .bold))
@@ -55,6 +113,7 @@ struct EmailAuthView: View {
                                     .onSubmit { field = .email }
                                     .accessibilityIdentifier("auth.displayName")
                             }
+                            .id(Field.displayName)
                         }
 
                         CahootsField(title: "Email", isFocused: field == .email) {
@@ -79,6 +138,7 @@ struct EmailAuthView: View {
                                 }
                                 .accessibilityIdentifier("auth.email")
                         }
+                        .id(Field.email)
 
                         if mode != .resetPassword {
                             CahootsField(title: "Password", isFocused: field == .password) {
@@ -121,6 +181,7 @@ struct EmailAuthView: View {
                                     .accessibilityLabel(showPassword ? "Hide password" : "Show password")
                                 }
                             }
+                            .id(Field.password)
                         }
 
                         if mode == .signIn {
@@ -156,77 +217,62 @@ struct EmailAuthView: View {
                                 .accessibilityIdentifier("auth.error")
                         }
                     }
-                }
-                .padding(.horizontal, AppSpacing.page)
-                .padding(.top, AppSpacing.medium)
-                .padding(.bottom, AppSpacing.extraLarge)
-            }
-            .interactiveKeyboardDismiss()
-            .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 12) {
-                    Button {
-                        Task { await submit() }
-                    } label: {
-                        if isWorking {
-                            ProgressView()
-                                .tint(AppColors.onInk)
-                                .frame(maxWidth: .infinity, minHeight: 54)
-                        } else {
-                            Text(primaryButtonTitle)
-                        }
-                    }
-                    .buttonStyle(PrimaryButtonStyle())
-                    .disabled(!canSubmit || isWorking)
-                    .accessibilityIdentifier(primaryIdentifier)
+        }
+        .padding(.horizontal, AppSpacing.page)
+        .padding(.top, AppSpacing.medium)
+        .padding(.bottom, AppSpacing.extraLarge)
+    }
 
-                    Button {
-                        withAnimation(AppMotion.calm) {
-                            store.errorBanner = nil
-                            password = ""
-                            showPassword = false
-                            switch mode {
-                            case .signUp:
-                                mode = .signIn
-                                field = .email
-                            case .signIn, .resetPassword:
-                                mode = .signUp
-                                field = .displayName
-                            }
-                        }
-                    } label: {
-                        Text(mode == .signUp
-                             ? "Already have an account? Sign in"
-                             : "Need an account? Create one")
-                            .font(.subheadline.weight(.semibold))
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isWorking)
-                    .accessibilityIdentifier("auth.switchMode")
-                }
-                .cahootsSheetFooter()
-            }
-            .roundPage()
-            .navigationTitle(navigationTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        store.errorBanner = nil
-                        dismiss()
-                    }
+    private var footer: some View {
+        VStack(spacing: 12) {
+            Button {
+                Task { await submit() }
+            } label: {
+                if isWorking {
+                    ProgressView()
+                        .tint(AppColors.onInk)
+                        .frame(maxWidth: .infinity, minHeight: 54)
+                } else {
+                    Text(primaryButtonTitle)
                 }
             }
-            .keyboardDoneToolbar()
-            .onAppear {
-                store.errorBanner = nil
-                field = mode == .signUp ? .displayName : .email
+            .buttonStyle(PrimaryButtonStyle())
+            .disabled(!canSubmit || isWorking)
+            .accessibilityIdentifier(primaryIdentifier)
+
+            Button {
+                withAnimation(AppMotion.calm) {
+                    store.errorBanner = nil
+                    password = ""
+                    showPassword = false
+                    switch mode {
+                    case .signUp:
+                        mode = .signIn
+                        field = .email
+                    case .signIn, .resetPassword:
+                        mode = .signUp
+                        field = .displayName
+                    }
+                }
+            } label: {
+                Text(mode == .signUp
+                     ? "Already have an account? Sign in"
+                     : "Need an account? Create one")
+                    .font(.subheadline.weight(.semibold))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, minHeight: 44)
             }
-            .onChange(of: store.noticeBanner) { _, notice in
-                if mode == .resetPassword, notice != nil { dismiss() }
+            .buttonStyle(.plain)
+            .disabled(isWorking)
+            .accessibilityIdentifier("auth.switchMode")
+        }
+        .cahootsSheetFooter()
+        .background {
+            GeometryReader { proxy in
+                Color.clear.preference(key: FooterHeightKey.self, value: proxy.size.height)
             }
         }
+        .onPreferenceChange(FooterHeightKey.self) { footerHeight = $0 }
     }
 
     private var title: String {
@@ -313,5 +359,12 @@ struct EmailAuthView: View {
             await store.resetPassword(email: trimmedEmail)
         }
         if store.isSignedIn { dismiss() }
+    }
+}
+
+private struct FooterHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }

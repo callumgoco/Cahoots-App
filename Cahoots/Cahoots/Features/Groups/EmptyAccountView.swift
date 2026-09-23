@@ -51,8 +51,9 @@ struct EmptyAccountView: View {
             .roundPage()
             .sheet(isPresented: $showCreate) { CreateGroupView() }
             .sheet(isPresented: $showJoin) { JoinGroupView() }
-            .confirmationDialog("Sign out of Cahoots?", isPresented: $showSignOut) {
+            .alert("Sign out of Cahoots?", isPresented: $showSignOut) {
                 Button("Sign out", role: .destructive) { Task { await store.signOutAsync() } }
+                Button("Cancel", role: .cancel) {}
             }
             .alert("Delete your account?", isPresented: $showDelete) {
                 Button("Delete account", role: .destructive) {

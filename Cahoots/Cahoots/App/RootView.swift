@@ -25,9 +25,10 @@ struct RootView: View {
             Task { await store.handleSignificantTimeChange() }
         }
         .onOpenURL { store.handleURL($0) }
+        .keyboardDoneToolbar()
         .sheet(isPresented: Bindable(store).showNotificationPrimer) {
             NotificationPrimerView()
-                .presentationDetents([.medium])
+                .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: Binding(
@@ -35,6 +36,19 @@ struct RootView: View {
             set: { if !$0 { store.clearPendingJoinRoute() } }
         )) {
             JoinGroupView(initialCode: store.pendingJoinCode ?? "")
+        }
+        .sheet(item: Binding(
+            get: { store.paywallContext.map(PaywallPresentation.init) },
+            set: { store.paywallContext = $0?.context }
+        )) { _ in
+            PaywallView()
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: Binding(
+            get: { store.pendingPaywallContinue == .create },
+            set: { if !$0 { store.pendingPaywallContinue = nil } }
+        )) {
+            CreateGroupView()
         }
         .alert("Your session has expired", isPresented: Bindable(store).sessionRecoveryRequired) {
             Button("Sign in again") { Task { await store.beginSessionRecovery() } }
@@ -59,6 +73,17 @@ struct RootView: View {
             case .loaded:
                 if store.currentGroup == nil { EmptyAccountView() } else { MainTabView() }
             }
+        }
+    }
+}
+
+private struct PaywallPresentation: Identifiable {
+    let context: PaywallContext
+    var id: String {
+        switch context {
+        case .create: "create"
+        case .join(let code): "join-\(code)"
+        case .manage: "manage"
         }
     }
 }
@@ -118,24 +143,26 @@ struct NotificationPrimerView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(spacing: AppSpacing.large) {
-            Image(systemName: "bell.badge.fill")
-                .font(.system(size: 42))
-                .foregroundStyle(AppColors.accent)
-                .frame(width: 88, height: 88)
-                .background(AppColors.accentSoft, in: RoundedRectangle(cornerRadius: 28))
-            VStack(spacing: AppSpacing.small) {
-                Text("A useful nudge, on your terms").font(.title2.bold()).multilineTextAlignment(.center)
-                Text("Cahoots can remind you about scheduled check-ins and votes. No workout quantities appear on your lock screen.")
-                    .foregroundStyle(AppColors.secondaryInk)
-                    .multilineTextAlignment(.center)
+        ScrollView {
+            VStack(spacing: AppSpacing.large) {
+                Image(systemName: "bell.badge.fill")
+                    .font(.system(size: 42))
+                    .foregroundStyle(AppColors.accent)
+                    .frame(width: 88, height: 88)
+                    .background(AppColors.accentSoft, in: RoundedRectangle(cornerRadius: 28))
+                VStack(spacing: AppSpacing.small) {
+                    Text("A useful nudge, on your terms").font(.title2.bold()).multilineTextAlignment(.center)
+                    Text("Cahoots can remind you about scheduled check-ins and votes. No workout quantities appear on your lock screen.")
+                        .foregroundStyle(AppColors.secondaryInk)
+                        .multilineTextAlignment(.center)
+                }
+                Button("Allow reminders") { Task { await store.requestNotifications() } }
+                    .buttonStyle(PrimaryButtonStyle())
+                Button("Not now") { Task { await store.dismissNotificationPrimer(); dismiss() } }
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 44)
             }
-            Button("Allow reminders") { Task { await store.requestNotifications() } }
-                .buttonStyle(PrimaryButtonStyle())
-            Button("Not now") { Task { await store.dismissNotificationPrimer(); dismiss() } }
-                .font(.headline)
-                .frame(maxWidth: .infinity, minHeight: 44)
+            .padding(AppSpacing.large)
         }
-        .padding(AppSpacing.large)
     }
 }

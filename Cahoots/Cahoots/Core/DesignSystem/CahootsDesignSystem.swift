@@ -68,21 +68,50 @@ enum AppTypography {
 
 struct CahootsCard<Content: View>: View {
     let elevated: Bool
+    /// Full-ink community highlight (Pushr-style inverted emphasis on the soft page).
+    let emphasis: Bool
     @ViewBuilder let content: Content
 
-    init(elevated: Bool = false, @ViewBuilder content: () -> Content) {
+    init(elevated: Bool = false, emphasis: Bool = false, @ViewBuilder content: () -> Content) {
         self.elevated = elevated
+        self.emphasis = emphasis
         self.content = content()
     }
 
     var body: some View {
-        // Force dark-scheme tokens inside cards so light mode gets mint type on charcoal surfaces.
-        content
-            .padding(AppSpacing.medium)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .environment(\.colorScheme, .dark)
-            .background(elevated ? AppColors.raised : AppColors.card, in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
-            .shadow(color: elevated ? AppShadow.color : .clear, radius: AppShadow.radius, y: AppShadow.y)
+        // Non-emphasis cards force dark-scheme tokens so light mode gets soft type on charcoal.
+        // Emphasis uses real appearance tokens (ink fill + onInk type) so light mode stays readable.
+        Group {
+            if emphasis {
+                content
+                    .padding(AppSpacing.medium)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .foregroundStyle(AppColors.onInk)
+            } else {
+                content
+                    .padding(AppSpacing.medium)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .foregroundStyle(AppColors.ink)
+                    .environment(\.colorScheme, .dark)
+            }
+        }
+        .background(backgroundFill, in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+        .overlay {
+            if elevated && !emphasis {
+                RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous)
+                    .strokeBorder(AppColors.ink.opacity(0.14), lineWidth: 1)
+            }
+        }
+        .shadow(
+            color: elevated || emphasis ? (emphasis ? Color.black.opacity(0.18) : AppShadow.color) : .clear,
+            radius: emphasis ? 20 : AppShadow.radius,
+            y: emphasis ? 8 : AppShadow.y
+        )
+    }
+
+    private var backgroundFill: Color {
+        if emphasis { return AppColors.ink }
+        return elevated ? AppColors.raised : AppColors.card
     }
 }
 
@@ -104,6 +133,8 @@ struct PrimaryButtonStyle: ButtonStyle {
     }
 }
 
+/// Quiet outline CTA under a filled primary (Create/Join, Record/Skip, Start now/Put to vote).
+/// Matches `OutlineButtonStyle` so charcoal-filled secondaries never read as a second primary.
 struct SecondaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -113,17 +144,20 @@ struct SecondaryButtonStyle: ButtonStyle {
             .font(.headline)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
-            .foregroundStyle(AppColors.ink.opacity(isEnabled ? 1 : 0.35))
-            .frame(maxWidth: .infinity, minHeight: 52)
+            .foregroundStyle(AppColors.ink.opacity(isEnabled ? (configuration.isPressed ? 0.55 : 1) : 0.35))
+            .frame(maxWidth: .infinity, minHeight: 54)
             .padding(.horizontal, AppSpacing.medium)
-            .background(AppColors.card.opacity(isEnabled ? (configuration.isPressed ? 0.65 : 1) : 0.55), in: Capsule())
-            .environment(\.colorScheme, .dark)
+            .background(AppColors.ink.opacity(configuration.isPressed ? 0.08 : 0.04), in: Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder(AppColors.ink.opacity(isEnabled ? 0.28 : 0.12), lineWidth: 1.5)
+            )
             .scaleEffect(!reduceMotion && configuration.isPressed && isEnabled ? 0.98 : 1)
             .animation(reduceMotion ? nil : AppMotion.responsive, value: configuration.isPressed)
     }
 }
 
-/// Quiet CTA for when a filled dark button already owns the screen (e.g. Sign in with Apple).
+/// Quiet outline CTA for paywall Restore and similar actions (same treatment as `SecondaryButtonStyle`).
 struct OutlineButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -354,9 +388,9 @@ struct WeekStrip: View {
                     Text(token.weekdayLabel)
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(AppColors.secondaryInk)
-                    Circle()
+                    Capsule(style: .continuous)
                         .fill(fill(for: token.state))
-                        .frame(width: 28, height: 28)
+                        .frame(width: 28, height: 40)
                         .overlay {
                             if token.state == .done {
                                 Image(systemName: "checkmark")
@@ -366,14 +400,10 @@ struct WeekStrip: View {
                                 Image(systemName: "moon.fill")
                                     .font(.caption2)
                                     .foregroundStyle(AppColors.accent)
-                            } else if token.state == .today {
-                                Circle()
-                                    .stroke(AppColors.accent, lineWidth: 2)
-                                    .padding(2)
                             } else if token.state == .missed {
                                 Image(systemName: "xmark")
                                     .font(.caption2.bold())
-                                    .foregroundStyle(AppColors.secondaryInk)
+                                    .foregroundStyle(AppColors.ink.opacity(0.55))
                             }
                         }
                 }
@@ -390,9 +420,9 @@ struct WeekStrip: View {
         case .done: AppColors.accent
         case .today: AppColors.accentSoft
         case .recovery: AppColors.accentSoft
-        case .missed: AppColors.secondaryInk.opacity(0.18)
+        case .missed: AppColors.ink.opacity(0.22)
         case .rest: AppColors.chip.opacity(0.55)
-        case .upcoming: AppColors.chip
+        case .upcoming: AppColors.chip.opacity(0.45)
         }
     }
 
@@ -404,6 +434,189 @@ struct WeekStrip: View {
         case .rest: String(localized: "rest day")
         case .recovery: String(localized: "recovery day")
         case .upcoming: String(localized: "upcoming")
+        }
+    }
+}
+
+struct MetricShelfItem: Identifiable, Equatable, Sendable {
+    let id: String
+    let value: String
+    let caption: String
+
+    init(id: String? = nil, value: String, caption: String) {
+        self.id = id ?? caption
+        self.value = value
+        self.caption = caption
+    }
+}
+
+/// Quiet three-column metric row under a hero (rank / streak / recovery).
+struct MetricShelf: View {
+    let items: [MetricShelfItem]
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                if index > 0 {
+                    Rectangle()
+                        .fill(AppColors.secondaryInk.opacity(0.18))
+                        .frame(width: 1, height: 28)
+                }
+                VStack(spacing: AppSpacing.micro) {
+                    Text(item.value)
+                        .font(.headline.weight(.bold).monospacedDigit())
+                        .foregroundStyle(AppColors.ink)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    Text(item.caption)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(AppColors.secondaryInk)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(items.map { "\($0.value) \($0.caption)" }.joined(separator: ", "))
+    }
+}
+
+enum CircularIconButtonStyle {
+    case material
+    case solid
+    case ink
+}
+
+/// Soft-shadowed circular chrome for back / add / flip / close.
+struct CircularIconButton: View {
+    let systemName: String
+    var style: CircularIconButtonStyle = .solid
+    var accessibilityLabel: String
+    var accessibilityIdentifier: String?
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.title3.bold())
+                .foregroundStyle(foreground)
+                .frame(width: 44, height: 44)
+                .background(background)
+                .clipShape(Circle())
+                .shadow(color: AppShadow.color, radius: 10, y: 4)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(accessibilityLabel))
+        .modifier(OptionalAccessibilityIdentifier(accessibilityIdentifier))
+    }
+
+    private var foreground: Color {
+        switch style {
+        case .material, .solid: .white
+        case .ink: AppColors.ink
+        }
+    }
+
+    @ViewBuilder
+    private var background: some View {
+        switch style {
+        case .material:
+            Circle().fill(.ultraThinMaterial)
+        case .solid:
+            Circle().fill(Color.black.opacity(0.35))
+        case .ink:
+            Circle().fill(AppColors.page)
+        }
+    }
+}
+
+/// Horizontal tick ruler for minutes-from-midnight (`0..<1440`), snapping to 5-minute steps.
+struct SlidingTimeDial: View {
+    @Binding var minutesFromMidnight: Int
+    var stepMinutes: Int = 5
+
+    private let totalMinutes = 24 * 60
+    private let tickSpacing: CGFloat = 8
+    @State private var dragOriginMinutes: Int?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var snappedMinutes: Int {
+        let clamped = min(max(minutesFromMidnight, 0), totalMinutes - stepMinutes)
+        return (clamped / stepMinutes) * stepMinutes
+    }
+
+    private var displayDate: Date {
+        Calendar.current.date(
+            bySettingHour: snappedMinutes / 60,
+            minute: snappedMinutes % 60,
+            second: 0,
+            of: .now
+        ) ?? .now
+    }
+
+    private var stepCount: Int { totalMinutes / stepMinutes }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.small) {
+            Text(displayDate.formatted(date: .omitted, time: .shortened))
+                .font(.title2.bold().monospacedDigit())
+                .foregroundStyle(AppColors.ink)
+                .frame(maxWidth: .infinity)
+                .contentTransition(reduceMotion ? .identity : .numericText())
+                .accessibilityHidden(true)
+
+            GeometryReader { geo in
+                let centerX = geo.size.width / 2
+                ZStack {
+                    HStack(spacing: 0) {
+                        ForEach(0..<stepCount, id: \.self) { index in
+                            let minutes = index * stepMinutes
+                            let isHour = minutes % 60 == 0
+                            let isHalfHour = minutes % 30 == 0
+                            Capsule(style: .continuous)
+                                .fill(AppColors.ink.opacity(isHour ? 0.85 : (isHalfHour ? 0.45 : 0.22)))
+                                .frame(width: 2, height: isHour ? 28 : (isHalfHour ? 20 : 12))
+                                .frame(width: tickSpacing, height: 36)
+                        }
+                    }
+                    .offset(x: centerX - tickSpacing / 2 - CGFloat(snappedMinutes / stepMinutes) * tickSpacing)
+                    .highPriorityGesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                if dragOriginMinutes == nil { dragOriginMinutes = snappedMinutes }
+                                let origin = dragOriginMinutes ?? snappedMinutes
+                                let deltaSteps = Int(round(-value.translation.width / tickSpacing))
+                                let next = origin + deltaSteps * stepMinutes
+                                minutesFromMidnight = min(max(next, 0), totalMinutes - stepMinutes)
+                            }
+                            .onEnded { _ in
+                                dragOriginMinutes = nil
+                                minutesFromMidnight = snappedMinutes
+                            }
+                    )
+
+                    Capsule(style: .continuous)
+                        .fill(AppColors.ink)
+                        .frame(width: 3, height: 36)
+                        .allowsHitTesting(false)
+                }
+            }
+            .frame(height: 44)
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
+            .contentShape(Rectangle())
+            .accessibilityElement()
+            .accessibilityLabel(String(localized: "Daily deadline"))
+            .accessibilityValue(displayDate.formatted(date: .omitted, time: .shortened))
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment:
+                    minutesFromMidnight = min(snappedMinutes + stepMinutes, totalMinutes - stepMinutes)
+                case .decrement:
+                    minutesFromMidnight = max(snappedMinutes - stepMinutes, 0)
+                @unknown default:
+                    break
+                }
+            }
         }
     }
 }
@@ -795,59 +1008,25 @@ struct AppBannerHost: View {
     }
 }
 
-/// Full-page brand loader used while the signed-in session hydrates.
+/// Full-page brand loader used while the signed-in session hydrates or refreshes.
+/// Spinner only — no caption — so cold start and reload feel the same.
 struct BrandLoadingView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorScheme) private var colorScheme
     @State private var spinAngle: Double = 0
-    @State private var breathe = false
     @State private var appeared = false
 
     var body: some View {
-        ZStack {
-            atmosphere
-
-            VStack(spacing: AppSpacing.large) {
-                Image("LoadingMark")
-                    .resizable()
-                    .renderingMode(.template)
-                    .scaledToFit()
-                    .foregroundStyle(AppColors.ink)
-                    .frame(width: 92, height: 92)
-                    .rotationEffect(.degrees(spinAngle))
-                    .scaleEffect(reduceMotion ? 1 : (breathe ? 1.05 : 0.96))
-                    .opacity(appeared ? 1 : 0)
-                    .accessibilityHidden(true)
-
-                Text("Getting your crew ready")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(AppColors.secondaryInk)
-                    .opacity(appeared ? (reduceMotion ? 0.75 : (breathe ? 0.9 : 0.55)) : 0)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task { await play() }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Loading")
-    }
-
-    private var atmosphere: some View {
-        ZStack {
-            Circle()
-                .fill(AppColors.ink.opacity(colorScheme == .dark ? 0.14 : 0.08))
-                .frame(width: 220, height: 220)
-                .blur(radius: 42)
-                .scaleEffect(breathe ? 1.18 : 0.88)
-            Circle()
-                .fill(AppColors.chip.opacity(colorScheme == .dark ? 0.55 : 0.85))
-                .frame(width: 120, height: 120)
-                .blur(radius: 18)
-                .scaleEffect(breathe ? 0.9 : 1.12)
-                .opacity(0.7)
-        }
-        .opacity(appeared ? 1 : 0)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+        Image("LoadingMark")
+            .resizable()
+            .renderingMode(.original)
+            .scaledToFit()
+            .frame(width: 72, height: 72)
+            .rotationEffect(.degrees(spinAngle))
+            .opacity(appeared ? 1 : 0)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .task { await play() }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Loading")
     }
 
     @MainActor
@@ -858,11 +1037,8 @@ struct BrandLoadingView: View {
 
         guard !reduceMotion else { return }
 
-        withAnimation(.easeInOut(duration: 1.35).repeatForever(autoreverses: true)) {
-            breathe = true
-        }
         // 3-fold mark: a full turn reads as a continuous chase around the ring.
-        withAnimation(.linear(duration: 2.6).repeatForever(autoreverses: false)) {
+        withAnimation(.linear(duration: 2.4).repeatForever(autoreverses: false)) {
             spinAngle = 360
         }
     }
@@ -918,6 +1094,18 @@ extension View {
     func roundFormChrome() -> some View {
         scrollContentBackground(.hidden)
             .background(AppColors.page.ignoresSafeArea())
+    }
+
+    /// Opaque nav chrome so drill-in content does not slide under the back button / title.
+    func cahootsDrillInBar() -> some View {
+        toolbarBackground(AppColors.page, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// Bottom inset so the last card clears the floating tab bar.
+    func cahootsTabBarClearance() -> some View {
+        padding(.bottom, 88)
     }
 }
 

@@ -69,6 +69,15 @@ struct ChallengeBuilderView: View {
                         .buttonStyle(PrimaryButtonStyle())
                         .disabled(!isStepValid || isSubmitting)
                         .accessibilityIdentifier("builder.startNow")
+                        Text(VotingWindowCopy.startNowCaption(
+                            startDate: draft.startDate,
+                            timeZoneIdentifier: draft.timezone
+                        ))
+                        .font(.footnote)
+                        .foregroundStyle(AppColors.secondaryInk)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .accessibilityIdentifier("builder.startNowCaption")
                         Button {
                             Task { await putToVote() }
                         } label: {
@@ -82,7 +91,14 @@ struct ChallengeBuilderView: View {
                         .buttonStyle(SecondaryButtonStyle())
                         .disabled(!isStepValid || isSubmitting || !canPutToVote)
                         .accessibilityIdentifier("builder.submit")
-                        if !canPutToVote {
+                        if canPutToVote {
+                            Text(VotingWindowCopy.putToVoteCaption(closesAt: VotingWindowCopy.estimatedCloseDate()))
+                                .font(.footnote)
+                                .foregroundStyle(AppColors.secondaryInk)
+                                .multilineTextAlignment(.center)
+                                .frame(maxWidth: .infinity)
+                                .accessibilityIdentifier("builder.putToVoteCaption")
+                        } else {
                             Text(VotingWindowCopy.soloVoteDisabledHint)
                                 .font(.footnote)
                                 .foregroundStyle(AppColors.secondaryInk)
@@ -108,13 +124,13 @@ struct ChallengeBuilderView: View {
                         .disabled(isSubmitting)
                 }
             }
-            .keyboardDoneToolbar()
-            .confirmationDialog("Close this draft?", isPresented: $showCloseConfirmation, titleVisibility: .visible) {
+            .alert("Close this draft?", isPresented: $showCloseConfirmation) {
                 Button("Keep draft") { saveDraft(); dismiss() }
                 Button("Discard draft", role: .destructive) { clearDraft(); dismiss() }
                 Button("Cancel", role: .cancel) {}
             } message: { Text("Your draft can be resumed for this group later.") }
             .roundPage()
+            .interactiveKeyboardDismiss()
             .onAppear(perform: loadDraft)
             .onChange(of: draft) { _, _ in if didLoad { saveDraft() } }
         }
@@ -219,7 +235,11 @@ struct ChallengeBuilderView: View {
                 CahootsCard {
                     VStack(alignment: .leading, spacing: AppSpacing.medium) {
                         Text("Check-in rules").font(.headline)
-                        DatePicker("Daily deadline", selection: deadlineBinding, displayedComponents: .hourAndMinute)
+                        Text("Daily deadline")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppColors.secondaryInk)
+                        SlidingTimeDial(minutesFromMidnight: $draft.deadlineMinutes)
+                            .padding(.bottom, AppSpacing.medium)
                         Picker("Timezone", selection: $draft.timezone) {
                             ForEach(timezoneOptions, id: \.self) { Text($0.replacingOccurrences(of: "_", with: " ")).tag($0) }
                         }
@@ -231,6 +251,7 @@ struct ChallengeBuilderView: View {
                     .foregroundStyle(AppColors.secondaryInk)
             }
             .padding(AppSpacing.page)
+            .padding(.bottom, AppSpacing.extraLarge + AppSpacing.large)
         }
         .onChange(of: draft.frequencyType) { _, value in if value == .daily { draft.scheduledWeekdays = Set(1...7) } }
     }
@@ -254,12 +275,6 @@ struct ChallengeBuilderView: View {
                         Label(scheduleSummary, systemImage: "calendar")
                         Label("\(draft.durationDays) days from \(draft.startDate.formatted(date: .abbreviated, time: .omitted))", systemImage: "flag.checkered")
                         Label("Daily check-in closes \(deadlineText) · \(draft.timezone)", systemImage: "clock")
-                        if canPutToVote {
-                            Label(
-                                VotingWindowCopy.statusLine(endsAt: VotingWindowCopy.estimatedCloseDate()),
-                                systemImage: "checkmark.seal"
-                            )
-                        }
                         Label("\(draft.recoveryDays) recovery \(draft.recoveryDays == 1 ? "day" : "days")", systemImage: "moon.zzz")
                     }
                 }

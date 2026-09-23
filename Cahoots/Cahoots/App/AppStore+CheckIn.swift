@@ -14,7 +14,7 @@ extension AppStore {
         guard quantity > 0 else {
             return .validationFailed(message: String(localized: "Enter an amount greater than zero."))
         }
-        guard WorkoutClipRules.areValid(clips, for: challenge.measurementType) else {
+        guard WorkoutClipRules.areSubmittable(clips, for: challenge.measurementType) else {
             return .validationFailed(message: String(localized: "Record a short workout clip before submitting."))
         }
         let now = environment.clock.now

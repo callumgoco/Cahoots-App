@@ -37,6 +37,16 @@ final class LiveAppRepository: AppRepository {
         try localStore.clearLiveOverlay()
     }
 
+    func syncEntitlement(signedTransaction: String) async throws -> Entitlement {
+        struct Response: Decodable {
+            var entitlement: Entitlement
+        }
+        let body = try encoder.encode(["signedTransaction": signedTransaction])
+        let data = try await client.request(path: "/functions/v1/sync-entitlement", method: "POST", body: body)
+        let response = try decoder.decode(Response.self, from: data)
+        return response.entitlement
+    }
+
     func syncSubmission(_ submission: Submission, challengeTimezone: String) async -> SubmissionSyncResult {
         let clientID = submission.clientGeneratedID.uuidString
         let dateToken = ScheduleEngine.requirementDateToken(
@@ -321,11 +331,15 @@ final class LiveAppRepository: AppRepository {
     }
 
     private func proposalParams(groupID: UUID, draft: ProposalDraft, startKey: String) -> [String: Any] {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd"
+        let startToken = ScheduleEngine.calendarDateToken(for: draft.startDate, timeZoneIdentifier: draft.timezone)
+            ?? {
+                let formatter = DateFormatter()
+                formatter.calendar = Calendar(identifier: .gregorian)
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                formatter.timeZone = TimeZone(identifier: draft.timezone) ?? .current
+                formatter.dateFormat = "yyyy-MM-dd"
+                return formatter.string(from: draft.startDate)
+            }()
         let frequency: String = {
             switch draft.frequencyType {
             case .daily: return "daily"
@@ -342,7 +356,7 @@ final class LiveAppRepository: AppRepository {
             "frequency_type_input": frequency,
             "scheduled_weekdays_input": Array(draft.scheduledWeekdays).sorted(),
             "duration_days_input": draft.durationDays,
-            startKey: formatter.string(from: draft.startDate),
+            startKey: startToken,
             "challenge_timezone_input": draft.timezone,
             "daily_deadline_minutes_input": draft.deadlineMinutes,
             "recovery_day_allowance_input": draft.recoveryDays

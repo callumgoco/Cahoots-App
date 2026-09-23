@@ -4,9 +4,6 @@
     "" : {
 
     },
-    "—" : {
-
-    },
     ", +%lld more" : {
 
     },
@@ -114,6 +111,18 @@
         }
       }
     },
+    "%@ still need to check in." : {
+
+    },
+    "%@ still need to vote." : {
+
+    },
+    "%@ still needs to check in." : {
+
+    },
+    "%@ still needs to vote." : {
+
+    },
     "%@, %@" : {
       "localizations" : {
         "en" : {
@@ -167,16 +176,6 @@
         }
       }
     },
-    "%lld day streak, rank %@, %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld day streak, rank %2$@, %3$@"
-          }
-        }
-      }
-    },
     "%lld days" : {
 
     },
@@ -203,18 +202,34 @@
         }
       }
     },
+    "%lld hrs" : {
+
+    },
     "%lld members · Private" : {
 
     },
     "%lld min" : {
 
     },
-    "%lld of %lld done · %@ still need to." : {
+    "%lld mins" : {
+
+    },
+    "%lld of %lld done · %@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "%1$lld of %2$lld done · %3$@ still need to."
+            "value" : "%1$lld of %2$lld done · %3$@"
+          }
+        }
+      }
+    },
+    "%lld of %lld showed up" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld showed up"
           }
         }
       }
@@ -229,12 +244,12 @@
         }
       }
     },
-    "%lld of %lld voted · %@ still need to." : {
+    "%lld of %lld voted · %@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "%1$lld of %2$lld voted · %3$@ still need to."
+            "value" : "%1$lld of %2$lld voted · %3$@"
           }
         }
       }
@@ -270,16 +285,6 @@
     "%lld-day streak" : {
 
     },
-    "%lld-day streak · %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld-day streak · %2$@"
-          }
-        }
-      }
-    },
     "+%lld" : {
 
     },
@@ -299,7 +304,22 @@
         }
       }
     },
+    "$4.99 / month" : {
+
+    },
+    "$29.99 / year · 7-day trial" : {
+
+    },
     "0" : {
+
+    },
+    "1 day" : {
+
+    },
+    "1 hr" : {
+
+    },
+    "1 min" : {
 
     },
     "1 recovery day" : {
@@ -330,9 +350,6 @@
 
     },
     "A short clip for the crew. You enter the number — this round is honour system." : {
-
-    },
-    "A short proof clip is required to unlock the crew feed. Honour-system-only check-ins are not available." : {
 
     },
     "A tie fails. Voting also closes early after every eligible member votes." : {
@@ -377,6 +394,9 @@
     "Already recording." : {
 
     },
+    "Annual" : {
+
+    },
     "Anyone with this code can join this group until it expires." : {
 
     },
@@ -393,6 +413,9 @@
 
     },
     "Back" : {
+
+    },
+    "Best value" : {
 
     },
     "Block %@?" : {
@@ -422,7 +445,10 @@
     "Cahoots never includes detailed workout quantities in lock-screen notifications." : {
 
     },
-    "Camera access is required to log a workout and unlock the crew feed." : {
+    "Camera access is needed to film a clip for the crew. You can still skip recording and enter today’s amount." : {
+
+    },
+    "Camera access is needed to film a clip. You can skip recording and enter today’s amount." : {
 
     },
     "Camera preview (stub)" : {
@@ -467,6 +493,15 @@
     "Check-in wasn’t accepted" : {
 
     },
+    "Check-ins start %@" : {
+
+    },
+    "Check-ins start today" : {
+
+    },
+    "Check-ins start tomorrow" : {
+
+    },
     "Check-ins will appear here once this round begins." : {
 
     },
@@ -483,6 +518,9 @@
 
     },
     "Choose a workout" : {
+
+    },
+    "Choose which crew to view." : {
 
     },
     "Clip unavailable" : {
@@ -556,10 +594,16 @@
     "Copy code" : {
 
     },
+    "Couldn’t leave your current crew." : {
+
+    },
     "Couldn’t reach the crew yet. Tap Retry." : {
 
     },
     "Couldn’t save changes" : {
+
+    },
+    "Couldn’t verify this purchase with Apple." : {
 
     },
     "Countdown %lld" : {
@@ -589,6 +633,12 @@
     "Crew today" : {
 
     },
+    "Crew votes until %@" : {
+
+    },
+    "current crew" : {
+
+    },
     "Daily check-in closes %@ · %@" : {
       "localizations" : {
         "en" : {
@@ -612,6 +662,9 @@
 
     },
     "Day %lld of %lld" : {
+
+    },
+    "day streak" : {
 
     },
     "Delete account" : {
@@ -701,6 +754,9 @@
     "Everyone has voted." : {
 
     },
+    "Everyone showed up" : {
+
+    },
     "Everyone’s in for today." : {
 
     },
@@ -723,6 +779,15 @@
         }
       }
     },
+    "Film a finish clip for the crew, or skip and enter today’s amount only." : {
+
+    },
+    "Film a short clip for the crew, or skip and enter today’s amount only. This round is honour system." : {
+
+    },
+    "Film short clips for the crew, or skip and enter today’s amount only. This round is honour system." : {
+
+    },
     "Film your set" : {
 
     },
@@ -741,6 +806,9 @@
     "Forgot password?" : {
 
     },
+    "Free includes one crew. Plus unlocks up to ten." : {
+
+    },
     "Friend activity" : {
 
     },
@@ -757,9 +825,6 @@
 
     },
     "Generate new invitation" : {
-
-    },
-    "Getting your crew ready" : {
 
     },
     "Group actions" : {
@@ -850,6 +915,9 @@
     "Join with a code" : {
 
     },
+    "Just now" : {
+
+    },
     "Keep draft" : {
 
     },
@@ -860,6 +928,12 @@
 
     },
     "Leaderboard period" : {
+
+    },
+    "Leave %@ and create instead" : {
+
+    },
+    "Leave %@ and join instead" : {
 
     },
     "Leave group" : {
@@ -886,16 +960,25 @@
     "Log workout" : {
 
     },
+    "Logging the number only — the crew won’t get a video. This round is honour system." : {
+
+    },
     "Make admin" : {
 
     },
     "Make member" : {
 
     },
+    "Manage subscription" : {
+
+    },
     "Measurement" : {
 
     },
     "Member blocked. Their activity is now hidden." : {
+
+    },
+    "Member limit" : {
 
     },
     "Member promoted to admin." : {
@@ -923,6 +1006,12 @@
 
     },
     "Missed today’s window" : {
+
+    },
+    "Monthly" : {
+
+    },
+    "More crews with Plus" : {
 
     },
     "Moved %@ %lld places" : {
@@ -966,6 +1055,9 @@
 
     },
     "No location sharing" : {
+
+    },
+    "No Plus subscription found for this Apple ID." : {
 
     },
     "No public discovery" : {
@@ -1019,6 +1111,9 @@
     "Only the group owner can delete this group." : {
 
     },
+    "Only the owner can edit this." : {
+
+    },
     "Open crew" : {
 
     },
@@ -1031,13 +1126,13 @@
     "Open Settings" : {
 
     },
+    "or" : {
+
+    },
     "Or enter a custom emoji" : {
 
     },
     "Owner" : {
-
-    },
-    "Owners must transfer ownership before leaving a group with other members." : {
 
     },
     "Ownership transferred." : {
@@ -1050,6 +1145,9 @@
 
     },
     "Paste an invite link or type the six-character code from a group member." : {
+
+    },
+    "Payment is charged to your Apple ID. Subscriptions renew unless cancelled at least 24 hours before the period ends. Manage in Settings → Apple ID → Subscriptions." : {
 
     },
     "pending" : {
@@ -1065,6 +1163,15 @@
 
     },
     "Play clip" : {
+
+    },
+    "Plus active" : {
+
+    },
+    "Plus isn’t available to purchase yet." : {
+
+    },
+    "Plus restored." : {
 
     },
     "points" : {
@@ -1083,6 +1190,9 @@
 
     },
     "Private" : {
+
+    },
+    "Private crew progress for today." : {
 
     },
     "Private group workout clips only" : {
@@ -1112,7 +1222,7 @@
     "QR code unavailable" : {
 
     },
-    "Rank %@" : {
+    "rank" : {
 
     },
     "Rank %lld, %@, %lld points" : {
@@ -1147,6 +1257,9 @@
     "Recent activity" : {
 
     },
+    "Record" : {
+
+    },
     "Record a short start clip for the crew, then finish after your activity. You enter the minutes — this round is honour system." : {
 
     },
@@ -1169,6 +1282,9 @@
 
     },
     "Recovery is part of consistency. Your next requirement will appear when it is scheduled." : {
+
+    },
+    "recovery left" : {
 
     },
     "Reject" : {
@@ -1210,6 +1326,9 @@
     "rest day" : {
 
     },
+    "Restore purchases" : {
+
+    },
     "Retake" : {
 
     },
@@ -1235,6 +1354,12 @@
 
     },
     "Round just started — first check-in takes the lead." : {
+
+    },
+    "Run multiple friend groups without mixing the competition." : {
+
+    },
+    "Same" : {
 
     },
     "Save" : {
@@ -1273,7 +1398,7 @@
     "Setting up camera…" : {
 
     },
-    "Share" : {
+    "Share invite" : {
 
     },
     "Show password" : {
@@ -1306,6 +1431,9 @@
     "Skip countdown" : {
 
     },
+    "Skip recording" : {
+
+    },
     "Sky" : {
 
     },
@@ -1313,6 +1441,9 @@
 
     },
     "START" : {
+
+    },
+    "Start a new crew or join one with an invite code." : {
 
     },
     "Start a new round" : {
@@ -1334,6 +1465,9 @@
 
     },
     "Start clip saved" : {
+
+    },
+    "Start free trial" : {
 
     },
     "Start now" : {
@@ -1391,6 +1525,9 @@
     "Submit anyway" : {
 
     },
+    "Subscribe to Plus" : {
+
+    },
     "Sunday Crew" : {
 
     },
@@ -1413,6 +1550,9 @@
 
     },
     "Target · %@" : {
+
+    },
+    "Terms" : {
 
     },
     "That Cahoots link is not valid." : {
@@ -1548,10 +1688,16 @@
     "Unblock" : {
 
     },
+    "Up to %lld crews" : {
+
+    },
     "Up to %lld people" : {
 
     },
     "upcoming" : {
+
+    },
+    "Upgrade to Plus" : {
 
     },
     "Use %@ as the group emoji" : {
@@ -1605,6 +1751,9 @@
     "Waiting on %@." : {
 
     },
+    "Waiting on the crew" : {
+
+    },
     "Welcome aboard — this crew has an open vote." : {
 
     },
@@ -1624,9 +1773,6 @@
 
     },
     "You" : {
-
-    },
-    "YOU" : {
 
     },
     "You already used a recovery day today." : {
@@ -1656,6 +1802,12 @@
     "You left the group." : {
 
     },
+    "You still need to check in." : {
+
+    },
+    "You still need to vote." : {
+
+    },
     "You voted %@. You can change it until voting closes." : {
 
     },
@@ -1668,7 +1820,16 @@
     "You’re first today." : {
 
     },
+    "You’re not in a crew to leave." : {
+
+    },
+    "You’re on Cahoots Plus." : {
+
+    },
     "You’re the only member so far. Invite friends, then start a round together — or begin solo with Start now." : {
+
+    },
+    "You’ve been invited to another crew. Plus lets you stay in both." : {
 
     },
     "Your Cahoots check-in" : {

@@ -42,6 +42,18 @@ struct CheckInVisibilityTests {
         #expect(!WorkoutClipRules.areValid([short], for: .repetitions))
     }
 
+    @Test func emptyClipsAreSubmittableForEveryMeasurement() {
+        for measurement in MeasurementType.allCases {
+            #expect(WorkoutClipRules.areSubmittable([], for: measurement))
+        }
+        let start = WorkoutClip(id: UUID(), kind: .start, durationSeconds: 3, localFilename: "start.mov", remotePath: nil, createdAt: .now)
+        #expect(!WorkoutClipRules.areSubmittable([start], for: .minutes))
+        #expect(!WorkoutClipRules.areSubmittable([start], for: .distance))
+        let set = WorkoutClip(id: UUID(), kind: .set, durationSeconds: 3, localFilename: "set.mov", remotePath: nil, createdAt: .now)
+        #expect(WorkoutClipRules.areSubmittable([set], for: .repetitions))
+        #expect(WorkoutClipRules.areSubmittable([set], for: .seconds))
+    }
+
     @Test func friendPostedCopySplitsByViewerState() {
         let incomplete = FriendPostedCopy.lockScreenBody(actorName: "Jordan", groupName: "Saturday Crew", viewerHasCompleted: false)
         let complete = FriendPostedCopy.lockScreenBody(actorName: "Jordan", groupName: "Saturday Crew", viewerHasCompleted: true)
@@ -174,6 +186,18 @@ struct ScheduleEngineRequirementDateTests {
         let afternoonLocal = calendar.date(byAdding: .hour, value: 14, to: day)!
         #expect(ScheduleEngine.isSameRequirementDay(localMidnight, afternoonLocal, challenge: challenge))
         #expect(ScheduleEngine.requirementDateToken(for: localMidnight, challenge: challenge) == "2026-09-10")
+    }
+
+    @Test func calendarDateTokenKeepsLondonDayWhenUTCIsPreviousDay() {
+        var london = Calendar(identifier: .gregorian)
+        london.timeZone = TimeZone(identifier: "Europe/London")!
+        let localMidnight = london.date(from: DateComponents(year: 2026, month: 9, day: 24))!
+        // Local midnight in London is still 23 Sep in UTC.
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(secondsFromGMT: 0)!
+        let utcParts = utc.dateComponents([.year, .month, .day], from: localMidnight)
+        #expect(utcParts.day == 23)
+        #expect(ScheduleEngine.calendarDateToken(for: localMidnight, timeZoneIdentifier: "Europe/London") == "2026-09-24")
     }
 
     @Test func legacyUTCMidnightMatchesTodayInTokyo() {

@@ -12,7 +12,7 @@ Live project URL: `https://wfxmguwfowvtkngqiqfr.supabase.co`
    - `202608200001_workout_clips_and_spoilers.sql`
    - `202609070001_live_backend_completion.sql` (profile bootstrap, missing RPCs, Realtime, Storage, cron)
 3. Confirm RLS is enabled on every public table and run the Security Advisor. `group_invites` uses a single member SELECT policy; invite writes go through security-definer RPCs (`20260909201841_phase4_invite_policy_consolidation.sql`).
-4. Deploy Edge Functions with JWT verification enabled (except cron-gated ones that use `x-cron-secret`):
+4. Deploy Edge Functions with JWT verification enabled (except cron-gated ones that use `x-cron-secret`, and Apple’s ASN webhook):
    - `app-snapshot`
    - `submit-workout`
    - `finalize-vote`
@@ -21,6 +21,8 @@ Live project URL: `https://wfxmguwfowvtkngqiqfr.supabase.co`
    - `delete-account`
    - `purge-workout-clips` (`verify_jwt` false)
    - `dispatch-pushes` (`verify_jwt` false; friend-posted outbox + digests)
+   - `sync-entitlement` (Cahoots Plus purchase sync)
+   - `storekit-notifications` (`verify_jwt` false; App Store Server Notifications V2)
 5. Private Storage bucket `workout-proofs` is created by the completion migration. Object path: `{group_id}/{challenge_id}/{requirement_date}/{user_id}/{clip_id}.mov`.
 
 The schema creates all MVP tables, indexes, eligible-voter snapshots, score ledger, privacy/moderation data, transaction functions, and policies. The service role is used only in trusted server jobs, never the iOS client.

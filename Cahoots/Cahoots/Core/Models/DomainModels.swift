@@ -140,6 +140,41 @@ enum AppearancePreference: String, Codable, CaseIterable, Identifiable, Sendable
 
 enum Entitlement: String, Codable, Sendable {
     case free, plus, groupPro
+
+    var membershipLimit: Int {
+        switch self {
+        case .free: 1
+        case .plus, .groupPro: 10
+        }
+    }
+
+    /// Effective access for crew caps (Plus, unused groupPro, or free).
+    var hasPlusAccess: Bool {
+        switch self {
+        case .plus, .groupPro: true
+        case .free: false
+        }
+    }
+}
+
+enum PlusProductID: String, CaseIterable, Identifiable, Sendable {
+    case monthly = "cahoots_plus_monthly"
+    case annual = "cahoots_plus_annual"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .monthly: String(localized: "Monthly")
+        case .annual: String(localized: "Annual")
+        }
+    }
+}
+
+enum PaywallContext: Equatable, Sendable {
+    case create
+    case join(code: String)
+    case manage
 }
 
 struct CahootsUser: Identifiable, Codable, Hashable, Sendable {
@@ -152,10 +187,77 @@ struct CahootsUser: Identifiable, Codable, Hashable, Sendable {
     var updatedAt: Date
     var deletedAt: Date?
     var showsExactTotals: Bool
+    var entitlement: Entitlement
+    var plusExpiresAt: Date?
+    var plusPreviewUntil: Date?
+
+    init(
+        id: UUID,
+        appleSubjectID: String? = nil,
+        displayName: String,
+        avatarPath: String? = nil,
+        timezoneIdentifier: String,
+        createdAt: Date,
+        updatedAt: Date,
+        deletedAt: Date? = nil,
+        showsExactTotals: Bool,
+        entitlement: Entitlement = .free,
+        plusExpiresAt: Date? = nil,
+        plusPreviewUntil: Date? = nil
+    ) {
+        self.id = id
+        self.appleSubjectID = appleSubjectID
+        self.displayName = displayName
+        self.avatarPath = avatarPath
+        self.timezoneIdentifier = timezoneIdentifier
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+        self.showsExactTotals = showsExactTotals
+        self.entitlement = entitlement
+        self.plusExpiresAt = plusExpiresAt
+        self.plusPreviewUntil = plusPreviewUntil
+    }
 
     var initials: String {
         let components = displayName.split(separator: " ")
         return components.prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
+    }
+
+    func effectiveEntitlement(at now: Date = .now) -> Entitlement {
+        if entitlement.hasPlusAccess {
+            if let expires = plusExpiresAt, expires <= now {
+                // expired StoreKit mirror
+            } else {
+                return entitlement == .groupPro ? .plus : entitlement
+            }
+        }
+        if let preview = plusPreviewUntil, preview > now {
+            return .plus
+        }
+        return .free
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, appleSubjectID, displayName, avatarPath, timezoneIdentifier
+        case createdAt, updatedAt, deletedAt, showsExactTotals
+        case entitlement, plusExpiresAt, plusPreviewUntil
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        appleSubjectID = try container.decodeIfPresent(String.self, forKey: .appleSubjectID)
+        displayName = try container.decode(String.self, forKey: .displayName)
+        avatarPath = try container.decodeIfPresent(String.self, forKey: .avatarPath)
+        timezoneIdentifier = try container.decode(String.self, forKey: .timezoneIdentifier)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+        showsExactTotals = try container.decodeIfPresent(Bool.self, forKey: .showsExactTotals) ?? false
+        entitlement = try container.decodeIfPresent(Entitlement.self, forKey: .entitlement) ?? .free
+        plusExpiresAt = try container.decodeIfPresent(Date.self, forKey: .plusExpiresAt)
+        plusPreviewUntil = try container.decodeIfPresent(Date.self, forKey: .plusPreviewUntil)
     }
 }
 

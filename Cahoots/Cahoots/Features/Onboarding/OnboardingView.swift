@@ -46,11 +46,17 @@ struct OnboardingView: View {
     private var onboardingContent: some View {
         GeometryReader { proxy in
             let cardHeight = preferredCardHeight(for: proxy.size.height)
-            ViewThatFits(in: .vertical) {
-                fullLayout(flexibleSpace: true, cardHeight: cardHeight)
+            VStack(spacing: 0) {
                 ScrollView(showsIndicators: false) {
-                    fullLayout(flexibleSpace: false, cardHeight: min(cardHeight, 226))
+                    featureColumn(cardHeight: cardHeight)
                 }
+
+                authCluster
+                    .padding(.horizontal, AppSpacing.page)
+                    .padding(.top, AppSpacing.small)
+                    .padding(.bottom, AppSpacing.large)
+                    .opacity(appeared ? 1 : 0)
+                    .offset(y: appeared || reduceMotion ? 0 : 8)
             }
         }
     }
@@ -62,40 +68,28 @@ struct OnboardingView: View {
         return 248
     }
 
-    private func fullLayout(flexibleSpace: Bool, cardHeight: CGFloat) -> some View {
-        VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: AppSpacing.small) {
-                if store.mode == .demo {
-                    HStack {
-                        DemoModeBadge()
-                        Spacer(minLength: 0)
-                    }
+    private func featureColumn(cardHeight: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.small) {
+            if store.mode == .demo {
+                HStack {
+                    DemoModeBadge()
+                    Spacer(minLength: 0)
                 }
-
-                if let code = store.pendingJoinCode {
-                    Label("Sign in to review invitation \(code)", systemImage: "envelope.open.fill")
-                        .font(.subheadline.weight(.semibold))
-                }
-
-                WelcomeFeatureCarousel(selection: $selectedFeature, cardHeight: cardHeight)
-            }
-            .padding(.top, dynamicTypeSize.isAccessibilitySize ? AppSpacing.small : 28)
-            .opacity(appeared ? 1 : 0)
-            .offset(y: appeared || reduceMotion ? 0 : 10)
-
-            if flexibleSpace {
-                Spacer(minLength: AppSpacing.medium)
-            } else {
-                Spacer().frame(height: AppSpacing.large)
             }
 
-            authCluster
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared || reduceMotion ? 0 : 8)
+            if let code = store.pendingJoinCode {
+                Label("Sign in to review invitation \(code)", systemImage: "envelope.open.fill")
+                    .font(.subheadline.weight(.semibold))
+            }
+
+            WelcomeFeatureCarousel(selection: $selectedFeature, cardHeight: cardHeight)
         }
-        .frame(maxWidth: .infinity, maxHeight: flexibleSpace ? .infinity : nil, alignment: .top)
+        .frame(maxWidth: .infinity, alignment: .top)
         .padding(.horizontal, AppSpacing.page)
-        .padding(.bottom, 24)
+        .padding(.top, dynamicTypeSize.isAccessibilitySize ? AppSpacing.small : 28)
+        .padding(.bottom, AppSpacing.medium)
+        .opacity(appeared ? 1 : 0)
+        .offset(y: appeared || reduceMotion ? 0 : 10)
     }
 
     private var authCluster: some View {
@@ -109,6 +103,12 @@ struct OnboardingView: View {
                 Text("No account needed")
                     .font(.caption)
                     .foregroundStyle(AppColors.secondaryInk)
+                    .padding(.bottom, AppSpacing.small)
+
+                Text("or")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AppColors.secondaryInk)
+                    .frame(maxWidth: .infinity)
                     .padding(.bottom, AppSpacing.medium)
             }
 
@@ -149,7 +149,6 @@ struct OnboardingView: View {
         }
         .frame(maxWidth: .infinity)
         .frame(minHeight: 44)
-        .accessibilityElement(children: .combine)
     }
 
     private func revealOnboarding() {

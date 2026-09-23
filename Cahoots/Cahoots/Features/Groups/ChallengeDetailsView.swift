@@ -34,9 +34,11 @@ struct ChallengeDetailsView: View {
                 }
             }
             .padding(AppSpacing.page)
+            .cahootsTabBarClearance()
         }
         .navigationTitle("Challenge details")
         .navigationBarTitleDisplayMode(.inline)
+        .cahootsDrillInBar()
         .roundPage()
     }
 

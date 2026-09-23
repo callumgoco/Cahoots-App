@@ -26,6 +26,11 @@ enum WorkoutClipRules {
                 && (clip.localFilename != nil || clip.remotePath != nil)
         }
     }
+
+    /// Empty clips are allowed (skip recording). Non-empty lists must still satisfy `areValid`.
+    static func areSubmittable(_ clips: [WorkoutClip], for measurement: MeasurementType) -> Bool {
+        clips.isEmpty || areValid(clips, for: measurement)
+    }
 }
 
 /// Mirrors server-side clip path checks: `{group}/{challenge}/{yyyy-MM-dd}/{user}/{filename}.mov`.
@@ -192,6 +197,13 @@ enum ScheduleEngine {
         if let utcToken = utcMidnightDateToken(date) {
             return utcToken
         }
+        return calendarDateToken(for: date, timeZoneIdentifier: timeZoneIdentifier)
+    }
+
+    /// Calendar day in a timezone for proposal / round start dates sent to Postgres.
+    /// Unlike `requirementDateToken`, this never treats UTC midnight as a calendar token —
+    /// local midnight in London is still the previous day in UTC.
+    static func calendarDateToken(for date: Date, timeZoneIdentifier: String) -> String? {
         guard let timezone = TimeZone(identifier: timeZoneIdentifier) else { return nil }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timezone

@@ -52,7 +52,11 @@ final class Session2SamStewardUITests: XCTestCase {
 
         if walk.buttons["today.logWorkout"].waitForExistence(timeout: 3) {
             walk.buttons["today.logWorkout"].tap()
-            shot(walk, "07-walk-prep")
+            shot(walk, "07-walk-choose")
+            if walk.buttons["workoutSession.chooseRecord"].waitForExistence(timeout: 3) {
+                walk.buttons["workoutSession.chooseRecord"].tap()
+            }
+            shot(walk, "07b-walk-prep")
             if walk.buttons["workoutSession.skipCountdown"].waitForExistence(timeout: 3) {
                 waitUntilEnabled(walk.buttons["workoutSession.skipCountdown"], timeout: 3)
                 walk.buttons["workoutSession.skipCountdown"].tap()
@@ -89,7 +93,10 @@ final class Session2SamStewardUITests: XCTestCase {
                 )
                 walk.buttons["today.logWorkout"].tap()
             }
-            // Resuming pending opens waiting or finish prep
+            // Resuming pending opens choose; Record continues to finish clip.
+            if walk.buttons["workoutSession.chooseRecord"].waitForExistence(timeout: 3) {
+                walk.buttons["workoutSession.chooseRecord"].tap()
+            }
             if walk.buttons["Record finish clip"].waitForExistence(timeout: 2)
                 || walk.buttons["workoutSession.recordFinish"].waitForExistence(timeout: 1) {
                 let record = walk.buttons["workoutSession.recordFinish"].exists

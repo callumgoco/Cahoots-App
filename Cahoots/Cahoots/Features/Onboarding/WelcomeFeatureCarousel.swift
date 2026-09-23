@@ -44,7 +44,7 @@ struct WelcomeFeatureCarousel: View {
     private let features = WelcomeFeature.all
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 28) {
+        VStack(alignment: .leading, spacing: AppSpacing.medium) {
             GeometryReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 0) {

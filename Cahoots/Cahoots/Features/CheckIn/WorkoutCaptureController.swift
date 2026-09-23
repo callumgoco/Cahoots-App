@@ -22,7 +22,7 @@ enum WorkoutCaptureError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .permissionDenied: String(localized: "Camera access is required to log a workout and unlock the crew feed.")
+        case .permissionDenied: String(localized: "Camera access is needed to film a clip. You can skip recording and enter today’s amount.")
         case .unavailable: String(localized: "The camera is unavailable right now.")
         case .alreadyRecording: String(localized: "Already recording.")
         case .notRecording: String(localized: "Nothing is recording.")
@@ -37,8 +37,17 @@ final class StubWorkoutCaptureController: WorkoutCapturing {
     private(set) var isRecording = false
     private(set) var currentPosition: AVCaptureDevice.Position = .front
     private var startedAt: Date?
+    /// Counts how many times `prepare()` ran — used by unit tests for reuse behaviour.
+    private(set) var prepareCallCount = 0
+    /// Optional delay so concurrent prepare callers overlap in tests.
+    var prepareDelayNanoseconds: UInt64 = 0
 
-    func prepare() async throws {}
+    func prepare() async throws {
+        prepareCallCount += 1
+        if prepareDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: prepareDelayNanoseconds)
+        }
+    }
 
     func flipCamera() async throws {
         currentPosition = currentPosition == .front ? .back : .front
@@ -66,6 +75,9 @@ final class StubWorkoutCaptureController: WorkoutCapturing {
     }
 }
 
+/// Owns the AVCaptureSession on a dedicated serial queue so configuration and
+/// `startRunning` never block the main actor. Stabilization is applied only
+/// when recording begins so the first preview frame appears quickly.
 @MainActor
 final class WorkoutCaptureController: NSObject, WorkoutCapturing, AVCaptureFileOutputRecordingDelegate {
     var previewLayer: AVCaptureVideoPreviewLayer?
@@ -73,10 +85,9 @@ final class WorkoutCaptureController: NSObject, WorkoutCapturing, AVCaptureFileO
     private(set) var isRecording = false
     private(set) var currentPosition: AVCaptureDevice.Position = .front
 
-    // Configured on the main actor, but started off it so the blocking
-    // startRunning() call never stalls the UI.
-    nonisolated(unsafe) private let session = AVCaptureSession()
-    private let movieOutput = AVCaptureMovieFileOutput()
+    private let sessionQueue = DispatchQueue(label: "com.callumoconnor.cahoots.workout-capture", qos: .userInitiated)
+    /// Session graph lives only on `sessionQueue`.
+    private let graph = CaptureGraph()
     private var continuation: CheckedContinuation<TimeInterval, Error>?
     private var recordingStartedAt: Date?
     private var maxDurationTimer: Timer?
@@ -109,63 +120,42 @@ final class WorkoutCaptureController: NSObject, WorkoutCapturing, AVCaptureFileO
             throw WorkoutCaptureError.permissionDenied
         }
 
-        session.beginConfiguration()
-        session.sessionPreset = .hd1280x720
-        session.inputs.forEach { session.removeInput($0) }
-        session.outputs.forEach { session.removeOutput($0) }
+        let position = currentPosition
+        let audioAuthorized = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        let graph = self.graph
 
-        guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: currentPosition),
-              let videoInput = try? AVCaptureDeviceInput(device: camera),
-              session.canAddInput(videoInput) else {
-            session.commitConfiguration()
-            throw WorkoutCaptureError.unavailable
-        }
-        session.addInput(videoInput)
-
-        if AVCaptureDevice.authorizationStatus(for: .audio) == .authorized,
-           let mic = AVCaptureDevice.default(for: .audio),
-           let audioInput = try? AVCaptureDeviceInput(device: mic),
-           session.canAddInput(audioInput) {
-            session.addInput(audioInput)
-        }
-
-        guard session.canAddOutput(movieOutput) else {
-            session.commitConfiguration()
-            throw WorkoutCaptureError.unavailable
-        }
-        session.addOutput(movieOutput)
-        if let connection = movieOutput.connection(with: .video), connection.isVideoStabilizationSupported {
-            connection.preferredVideoStabilizationMode = .auto
-        }
-        session.commitConfiguration()
-
-        let layer = AVCaptureVideoPreviewLayer(session: session)
-        layer.videoGravity = .resizeAspectFill
-        previewLayer = layer
-
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            DispatchQueue.global(qos: .userInitiated).async {
-                self.session.startRunning()
-                continuation.resume()
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            sessionQueue.async {
+                do {
+                    try graph.prepare(position: position, audioAuthorized: audioAuthorized)
+                    continuation.resume()
+                } catch {
+                    continuation.resume(throwing: error)
+                }
             }
         }
+
+        let layer = AVCaptureVideoPreviewLayer(session: graph.session)
+        layer.videoGravity = .resizeAspectFill
+        previewLayer = layer
     }
 
     func flipCamera() async throws {
-        currentPosition = currentPosition == .front ? .back : .front
+        let next = currentPosition == .front ? AVCaptureDevice.Position.back : .front
         guard !isRecording else { return }
-        session.beginConfiguration()
-        if let current = session.inputs.compactMap({ $0 as? AVCaptureDeviceInput }).first(where: { $0.device.hasMediaType(.video) }) {
-            session.removeInput(current)
+        let graph = self.graph
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            sessionQueue.async {
+                do {
+                    try graph.flip(to: next)
+                    continuation.resume()
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
         }
-        guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: currentPosition),
-              let input = try? AVCaptureDeviceInput(device: camera),
-              session.canAddInput(input) else {
-            session.commitConfiguration()
-            throw WorkoutCaptureError.unavailable
-        }
-        session.addInput(input)
-        session.commitConfiguration()
+        currentPosition = next
     }
 
     func startRecording(to url: URL) async throws {
@@ -173,9 +163,18 @@ final class WorkoutCaptureController: NSObject, WorkoutCapturing, AVCaptureFileO
         if FileManager.default.fileExists(atPath: url.path) {
             try? FileManager.default.removeItem(at: url)
         }
+
+        let graph = self.graph
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            sessionQueue.async {
+                graph.applyRecordingStabilization()
+                continuation.resume()
+            }
+        }
+
         isRecording = true
         recordingStartedAt = .now
-        movieOutput.startRecording(to: url, recordingDelegate: self)
+        graph.movieOutput.startRecording(to: url, recordingDelegate: self)
         maxDurationTimer?.invalidate()
         maxDurationTimer = Timer.scheduledTimer(withTimeInterval: WorkoutClipRules.maximumDuration, repeats: false) { [weak self] _ in
             Task { @MainActor in
@@ -190,16 +189,19 @@ final class WorkoutCaptureController: NSObject, WorkoutCapturing, AVCaptureFileO
         maxDurationTimer = nil
         return try await withCheckedThrowingContinuation { continuation in
             self.continuation = continuation
-            movieOutput.stopRecording()
+            graph.movieOutput.stopRecording()
         }
     }
 
     func tearDown() {
         maxDurationTimer?.invalidate()
         maxDurationTimer = nil
-        if session.isRunning { session.stopRunning() }
         previewLayer = nil
         isRecording = false
+        let graph = self.graph
+        sessionQueue.async {
+            graph.tearDown()
+        }
     }
 
     nonisolated func fileOutput(
@@ -219,5 +221,90 @@ final class WorkoutCaptureController: NSObject, WorkoutCapturing, AVCaptureFileO
             }
             self.continuation = nil
         }
+    }
+}
+
+/// Capture graph mutated only on the workout-capture session queue.
+private final class CaptureGraph: @unchecked Sendable {
+    let session = AVCaptureSession()
+    let movieOutput = AVCaptureMovieFileOutput()
+    private var isConfigured = false
+
+    func prepare(position: AVCaptureDevice.Position, audioAuthorized: Bool) throws {
+        try configureAudioSession()
+        session.automaticallyConfiguresApplicationAudioSession = false
+
+        if !isConfigured || !session.isRunning {
+            session.beginConfiguration()
+            session.sessionPreset = .hd1280x720
+            session.inputs.forEach { session.removeInput($0) }
+            session.outputs.forEach { session.removeOutput($0) }
+
+            guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position),
+                  let videoInput = try? AVCaptureDeviceInput(device: camera),
+                  session.canAddInput(videoInput) else {
+                session.commitConfiguration()
+                throw WorkoutCaptureError.unavailable
+            }
+            session.addInput(videoInput)
+
+            if audioAuthorized,
+               let mic = AVCaptureDevice.default(for: .audio),
+               let audioInput = try? AVCaptureDeviceInput(device: mic),
+               session.canAddInput(audioInput) {
+                session.addInput(audioInput)
+            }
+
+            guard session.canAddOutput(movieOutput) else {
+                session.commitConfiguration()
+                throw WorkoutCaptureError.unavailable
+            }
+            session.addOutput(movieOutput)
+            // Do not enable stabilization here — it delays the first preview frame.
+            session.commitConfiguration()
+            isConfigured = true
+        }
+
+        if !session.isRunning {
+            session.startRunning()
+        }
+    }
+
+    func flip(to position: AVCaptureDevice.Position) throws {
+        session.beginConfiguration()
+        if let current = session.inputs.compactMap({ $0 as? AVCaptureDeviceInput }).first(where: { $0.device.hasMediaType(.video) }) {
+            session.removeInput(current)
+        }
+        guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position),
+              let input = try? AVCaptureDeviceInput(device: camera),
+              session.canAddInput(input) else {
+            session.commitConfiguration()
+            throw WorkoutCaptureError.unavailable
+        }
+        session.addInput(input)
+        session.commitConfiguration()
+    }
+
+    func applyRecordingStabilization() {
+        if let connection = movieOutput.connection(with: .video), connection.isVideoStabilizationSupported {
+            connection.preferredVideoStabilizationMode = .standard
+        }
+    }
+
+    func tearDown() {
+        if session.isRunning {
+            session.stopRunning()
+        }
+        session.beginConfiguration()
+        session.inputs.forEach { session.removeInput($0) }
+        session.outputs.forEach { session.removeOutput($0) }
+        session.commitConfiguration()
+        isConfigured = false
+    }
+
+    private func configureAudioSession() throws {
+        let audio = AVAudioSession.sharedInstance()
+        try audio.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker, .allowBluetoothHFP])
+        try audio.setActive(true, options: [])
     }
 }

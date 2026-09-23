@@ -48,6 +48,7 @@ extension AppStore {
             isSignedIn = true
             loadState = currentGroup == nil ? .empty : .loaded
             presentPendingRouteIfPossible()
+            await refreshEntitlements()
             await registerForRemoteNotificationsIfNeeded()
             AppLog.lifecycle.info("Loaded local app state with \(self.activeGroups.count, privacy: .public) active groups")
             logTodayCheckInDiagnostics(context: reset ? "reset" : "load")
@@ -90,6 +91,7 @@ extension AppStore {
     }
 
     func handleBecameActive() async {
+        await refreshEntitlements()
         await reconcileAndPersist()
         await drainPending()
         await rebuildNotificationPlan()
@@ -260,11 +262,15 @@ extension AppStore {
         }
         let settings = snapshot.notificationSettings ?? UserNotificationSettings.defaults(userID: snapshot.currentUser.id, groups: activeGroups)
         let suppressPrimer = ProcessInfo.processInfo.arguments.contains("-suppressNotificationPrimer")
-        if status == .notDetermined,
-           !suppressPrimer,
-           !settings.primerDismissed,
-           snapshot.challenges.contains(where: { activeGroups.map(\.id).contains($0.groupID) && ($0.status == .active || $0.status == .scheduled) }) {
-            showNotificationPrimer = true
+        let shouldOfferPrimer = status == .notDetermined
+            && !suppressPrimer
+            && !settings.primerDismissed
+            && snapshot.challenges.contains(where: { activeGroups.map(\.id).contains($0.groupID) && ($0.status == .active || $0.status == .scheduled) })
+        if shouldOfferPrimer {
+            scheduleNotificationPrimer()
+        } else {
+            notificationPrimerTask?.cancel()
+            notificationPrimerTask = nil
         }
         guard status == .authorized || status == .provisional || status == .ephemeral else {
             await environment.notifications.replacePlan([])
@@ -273,5 +279,20 @@ extension AppStore {
         await environment.notifications.replacePlan(NotificationPlanBuilder.build(snapshot: snapshot, now: environment.clock.now))
         AppLog.notifications.info("Rebuilt local notification plan")
         await registerForRemoteNotificationsIfNeeded()
+    }
+
+    /// Delay the reminders sheet so system password prompts can finish first.
+    private func scheduleNotificationPrimer() {
+        guard !showNotificationPrimer else { return }
+        notificationPrimerTask?.cancel()
+        notificationPrimerTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled, let self else { return }
+            guard !self.showNotificationPrimer else { return }
+            guard self.paywallContext == nil else { return }
+            guard self.pendingJoinCode == nil else { return }
+            guard self.pendingPaywallContinue == nil else { return }
+            self.showNotificationPrimer = true
+        }
     }
 }

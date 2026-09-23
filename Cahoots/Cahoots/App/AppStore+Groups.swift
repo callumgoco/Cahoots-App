@@ -3,6 +3,11 @@ import Foundation
 extension AppStore {
     func createGroup(name: String, emoji: String, memberLimit: Int) async -> GroupInvite? {
         guard requireConnection() else { return nil }
+        await refreshEntitlements()
+        guard canAddCrewMembership else {
+            presentPaywall(.create)
+            return nil
+        }
         guard await applyCommand(.createGroup(name: name, emoji: emoji, memberLimit: memberLimit)) else { return nil }
         if let group = activeGroups.first {
             ensureNotificationSettings(for: group.id)
@@ -20,6 +25,11 @@ extension AppStore {
         guard requireConnection() else { return String(localized: "Connect to the internet to join a group.") }
         let code = rawCode.uppercased().filter { $0.isLetter || $0.isNumber }
         guard code.count == 6 else { return String(localized: "Enter a six-character invitation code.") }
+        await refreshEntitlements()
+        if !canAddCrewMembership {
+            presentPaywall(.join(code: code))
+            return nil
+        }
         do {
             if let updated = try await environment.repository.perform(.joinGroup(code: code)) {
                 snapshot = SnapshotMigrator.migrate(updated)
@@ -40,7 +50,12 @@ extension AppStore {
             }
             return nil
         } catch {
-            return error.localizedDescription
+            let message = error.localizedDescription
+            if message.localizedCaseInsensitiveContains("plus_required")
+                || message.localizedCaseInsensitiveContains("Free includes one crew") {
+                presentPaywall(.join(code: code))
+            }
+            return message
         }
     }
 
