@@ -304,7 +304,14 @@ private final class CaptureGraph: @unchecked Sendable {
 
     private func configureAudioSession() throws {
         let audio = AVAudioSession.sharedInstance()
-        try audio.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker, .allowBluetoothHFP])
+        // Same option bit. Xcode 26 renamed allowBluetooth to allowBluetoothHFP;
+        // Xcode 16.4, which CI uses, only has allowBluetooth.
+        #if compiler(>=6.2)
+        let bluetooth = AVAudioSession.CategoryOptions.allowBluetoothHFP
+        #else
+        let bluetooth = AVAudioSession.CategoryOptions.allowBluetooth
+        #endif
+        try audio.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker, bluetooth])
         try audio.setActive(true, options: [])
     }
 }
