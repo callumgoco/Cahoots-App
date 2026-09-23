@@ -97,7 +97,7 @@ final class CahootsFlowUITests: XCTestCase {
         )).firstMatch.waitForExistence(timeout: 2))
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(
             format: "label BEGINSWITH %@",
-            "Voting ends"
+            "Closes"
         )).firstMatch.exists)
 
         // B5 propose findable when no open vote
@@ -148,6 +148,10 @@ final class CahootsFlowUITests: XCTestCase {
         XCTAssertTrue(code.waitForExistence(timeout: 2))
         code.tap(); code.typeText("CAHOOT")
         app.buttons["joinGroup.submit"].tap()
+        // Joining Saturday Crew opens its live vote, which hides the Today switcher.
+        if app.navigationBars["Group vote"].waitForExistence(timeout: 4) {
+            app.tabBars.buttons["Today"].tap()
+        }
         XCTAssertTrue(app.buttons["group.switcher"].waitForExistence(timeout: 4))
         XCTAssertTrue(app.staticTexts["Today"].exists)
     }
@@ -315,7 +319,8 @@ final class CahootsFlowUITests: XCTestCase {
         let app = launchDemo(empty: true)
         let menu = app.buttons["empty.accountMenu"]
         XCTAssertTrue(menu.waitForExistence(timeout: 5))
-        menu.tap()
+        // XCTest's scroll-to-visible fails on this toolbar item even though it is on screen.
+        menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(app.buttons["Sign Out"].waitForExistence(timeout: 2))
         XCTAssertTrue(app.buttons["Delete Account"].exists)
     }

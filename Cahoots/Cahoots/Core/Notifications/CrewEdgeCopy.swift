@@ -40,10 +40,14 @@ enum CrewEdgeCopy {
 
     static func scheduledStartsLabel(startDate: Date, now: Date = .now) -> String {
         let absolute = startDate.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
-        if Calendar.current.isDateInTomorrow(startDate) {
+        let calendar = Calendar.current
+        let startDay = calendar.startOfDay(for: startDate)
+        let today = calendar.startOfDay(for: now)
+        let dayDelta = calendar.dateComponents([.day], from: today, to: startDay).day
+        if dayDelta == 1 {
             return String(localized: "Starts tomorrow · \(absolute)")
         }
-        if Calendar.current.isDateInToday(startDate) {
+        if dayDelta == 0 {
             return String(localized: "Starts today · \(absolute)")
         }
         let relative = startDate.formatted(.relative(presentation: .named, unitsStyle: .wide))

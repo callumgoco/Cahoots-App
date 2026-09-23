@@ -24,15 +24,23 @@ extension AppStore {
         loadState = .loading
         do {
             snapshot = SnapshotMigrator.migrate(reset ? try await environment.repository.reset() : try await environment.repository.load())
+            var shouldPersistTestSnapshot = false
             if ProcessInfo.processInfo.arguments.contains("-emptyDemo"), var emptySnapshot = snapshot {
                 emptySnapshot.memberships.removeAll { $0.userID == emptySnapshot.currentUser.id }
                 snapshot = emptySnapshot
+                shouldPersistTestSnapshot = true
             }
             if ProcessInfo.processInfo.arguments.contains("-noProposal"), var proposalSnapshot = snapshot {
                 let openProposalIDs = Set(proposalSnapshot.proposals.filter { $0.status == .voting }.map(\.id))
                 proposalSnapshot.proposals.removeAll { openProposalIDs.contains($0.id) }
                 proposalSnapshot.votes.removeAll { openProposalIDs.contains($0.proposalID) }
                 snapshot = proposalSnapshot
+                shouldPersistTestSnapshot = true
+            }
+            // Commands reload the repository snapshot. Keep UI-test flags there too,
+            // or join/create still sees the seeded memberships and open votes.
+            if shouldPersistTestSnapshot, let snapshot, environment.repository.mode == .demo {
+                try await environment.repository.save(snapshot)
             }
             if !activeGroups.contains(where: { $0.id == activeGroupID }) { setActiveGroup(activeGroups.first?.id) }
             await reconcileAndPersist()
