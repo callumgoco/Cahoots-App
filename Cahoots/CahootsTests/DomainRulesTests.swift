@@ -284,6 +284,53 @@ struct ScheduleTests {
         #expect(ScheduleEngine.isScheduled(on: monday, challenge: challenge))
         #expect(!ScheduleEngine.isScheduled(on: monday.addingTimeInterval(86_400), challenge: challenge))
     }
+    @Test func sameDayStartStaysOpenBeforeTheDeadline() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/London")!
+        let morning = calendar.date(from: DateComponents(year: 2026, month: 9, day: 24, hour: 9))!
+        let closed = ScheduleEngine.firstCheckInAlreadyClosed(
+            startDate: morning,
+            deadlineMinutes: 21 * 60,
+            timeZoneIdentifier: "Europe/London",
+            frequencyType: .daily,
+            scheduledWeekdays: Set(1...7),
+            now: morning
+        )
+        #expect(!closed)
+    }
+
+    @Test func sameDayStartClosesAfterTheDeadline() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/London")!
+        let evening = calendar.date(from: DateComponents(year: 2026, month: 9, day: 24, hour: 22))!
+        let closed = ScheduleEngine.firstCheckInAlreadyClosed(
+            startDate: evening,
+            deadlineMinutes: 21 * 60,
+            timeZoneIdentifier: "Europe/London",
+            frequencyType: .daily,
+            scheduledWeekdays: Set(1...7),
+            now: evening
+        )
+        #expect(closed)
+        #expect(ScheduleEngine.firstCheckInClosedMessage.localizedCaseInsensitiveContains("deadline"))
+    }
+
+    @Test func sameDayStartOnARestDayIsNotAMiss() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/London")!
+        let thursday = calendar.date(from: DateComponents(year: 2026, month: 9, day: 24, hour: 22))!
+        #expect(calendar.component(.weekday, from: thursday) == 5)
+        let closed = ScheduleEngine.firstCheckInAlreadyClosed(
+            startDate: thursday,
+            deadlineMinutes: 21 * 60,
+            timeZoneIdentifier: "Europe/London",
+            frequencyType: .selectedWeekdays,
+            scheduledWeekdays: [2],
+            now: thursday
+        )
+        #expect(!closed)
+    }
+
     @Test func challengeTimezoneDeadline() {
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "Europe/London")!
         let date = calendar.date(from: DateComponents(year: 2026, month: 1, day: 10, hour: 12))!

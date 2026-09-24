@@ -14,6 +14,8 @@ struct CahootsApp: App {
         let environment = AppEnvironment.make(modelContext: ModelContext(container))
         let appStore = AppStore(environment: environment)
         _store = State(initialValue: appStore)
+        // Attach before the first scene appears so a cold-start notification tap is not dropped.
+        appDelegate.store = appStore
         CahootsMetricSubscriber.shared.start()
         if let identifier = Bundle.main.bundleIdentifier.map({ "\($0).sync" }) {
             BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: nil) { task in
@@ -42,7 +44,10 @@ struct CahootsApp: App {
             RootView()
                 .environment(store)
                 .preferredColorScheme(preferredScheme)
-                .onAppear { appDelegate.store = store }
+                .onAppear {
+                    // Re-bind in case SwiftUI recreated the scene while keeping the same store.
+                    appDelegate.store = store
+                }
         }
         .modelContainer(modelContainer)
     }

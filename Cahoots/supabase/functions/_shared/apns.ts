@@ -141,7 +141,8 @@ export async function sendApnsAlert(
 
   const shouldInvalidateToken = response.status === 410 ||
     reason === "BadDeviceToken" ||
-    reason === "Unregistered";
+    reason === "Unregistered" ||
+    reason === "DeviceTokenNotForTopic";
 
   return { ok: false, status: response.status, reason, shouldInvalidateToken };
 }

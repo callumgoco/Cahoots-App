@@ -5,8 +5,11 @@ struct PaywallView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var selectedProduct: PlusProductID = .annual
+    @State private var offers: [PlusProductOffer] = []
+    @State private var isLoadingOffers = true
     @State private var isWorking = false
     @State private var statusMessage: String?
+    @State private var confirmLeave = false
 
     private var context: PaywallContext {
         store.paywallContext ?? .manage
@@ -31,9 +34,21 @@ struct PaywallView: View {
                         }
                     }
 
-                    VStack(spacing: AppSpacing.small) {
-                        productButton(.annual, badge: String(localized: "Best value"))
-                        productButton(.monthly, badge: nil)
+                    if isLoadingOffers {
+                        ProgressView()
+                            .frame(maxWidth: .infinity, minHeight: 88)
+                    } else if offers.isEmpty {
+                        Text("Plus plans aren’t available right now. Check your connection and try again.")
+                            .font(.subheadline)
+                            .foregroundStyle(AppColors.secondaryInk)
+                    } else {
+                        VStack(spacing: AppSpacing.small) {
+                            ForEach(offers, id: \.id) { offer in
+                                productButton(offer, badge: offer.id == .annual
+                                              ? String(localized: "Best value")
+                                              : nil)
+                            }
+                        }
                     }
 
                     if let statusMessage {
@@ -50,13 +65,11 @@ struct PaywallView: View {
                                 .tint(AppColors.onInk)
                                 .frame(maxWidth: .infinity, minHeight: 54)
                         } else {
-                            Text(selectedProduct == .annual
-                                 ? String(localized: "Start free trial")
-                                 : String(localized: "Subscribe to Plus"))
+                            Text(subscribeTitle)
                         }
                     }
                     .buttonStyle(PrimaryButtonStyle())
-                    .disabled(isWorking)
+                    .disabled(isWorking || offers.isEmpty)
                     .accessibilityIdentifier("paywall.subscribe")
 
                     Button("Restore purchases") {
@@ -68,7 +81,7 @@ struct PaywallView: View {
 
                     if showsEscapeHatch {
                         Button(escapeTitle) {
-                            Task { await leaveAndContinue() }
+                            confirmLeave = true
                         }
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(AppColors.secondaryInk)
@@ -91,7 +104,25 @@ struct PaywallView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .roundPage()
+            .task { await loadOffers() }
+            .sheet(isPresented: $confirmLeave) {
+                CahootsConfirmationSheet(
+                    title: leaveConfirmTitle,
+                    message: leaveConfirmMessage,
+                    confirmTitle: "Leave and continue",
+                    isWorking: isWorking,
+                    onConfirm: { Task { await leaveAndContinue() } },
+                    onCancel: { confirmLeave = false }
+                )
+            }
         }
+    }
+
+    private var subscribeTitle: String {
+        if let offer = offers.first(where: { $0.id == selectedProduct }), offer.hasFreeTrial {
+            return String(localized: "Start free trial")
+        }
+        return String(localized: "Subscribe to Plus")
     }
 
     private var contextLine: String {
@@ -109,6 +140,29 @@ struct PaywallView: View {
         switch context {
         case .create, .join: store.currentGroup != nil
         case .manage: false
+        }
+    }
+
+    private var leaveConfirmTitle: String {
+        let name = store.currentGroup?.name ?? String(localized: "your current crew")
+        switch context {
+        case .join:
+            return String(localized: "Leave \(name) to join another crew?")
+        case .create:
+            return String(localized: "Leave \(name) to create another crew?")
+        case .manage:
+            return String(localized: "Leave \(name)?")
+        }
+    }
+
+    private var leaveConfirmMessage: String {
+        switch context {
+        case .join:
+            return String(localized: "You’ll leave this crew and join the invited one. You won’t stay in both.")
+        case .create:
+            return String(localized: "You’ll leave this crew, then start a new one. You won’t stay in both.")
+        case .manage:
+            return String(localized: "You’ll lose access to this crew’s rounds and activity.")
         }
     }
 
@@ -135,15 +189,15 @@ struct PaywallView: View {
         }
     }
 
-    private func productButton(_ product: PlusProductID, badge: String?) -> some View {
-        let isSelected = selectedProduct == product
+    private func productButton(_ offer: PlusProductOffer, badge: String?) -> some View {
+        let isSelected = selectedProduct == offer.id
         return Button {
-            selectedProduct = product
+            selectedProduct = offer.id
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: AppSpacing.small) {
-                        Text(product.displayName)
+                        Text(offer.displayName)
                             .font(.headline)
                         if let badge {
                             Text(badge)
@@ -157,9 +211,7 @@ struct PaywallView: View {
                                 .foregroundStyle(isSelected ? AppColors.onInk : AppColors.ink)
                         }
                     }
-                    Text(product == .annual
-                         ? String(localized: "$29.99 / year · 7-day trial")
-                         : String(localized: "$4.99 / month"))
+                    Text(offer.priceText)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(isSelected ? AppColors.onInk.opacity(0.72) : AppColors.secondaryInk)
                 }
@@ -182,7 +234,7 @@ struct PaywallView: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("paywall.product.\(product.rawValue)")
+        .accessibilityIdentifier("paywall.product.\(offer.id.rawValue)")
     }
 
     private var legalFooter: some View {
@@ -200,6 +252,18 @@ struct PaywallView: View {
             }
             .font(.caption.weight(.semibold))
         }
+    }
+
+    private func loadOffers() async {
+        isLoadingOffers = true
+        let loaded = await store.loadPlusProductOffers()
+        offers = loaded
+        if let annual = loaded.first(where: { $0.id == .annual }) {
+            selectedProduct = annual.id
+        } else if let first = loaded.first {
+            selectedProduct = first.id
+        }
+        isLoadingOffers = false
     }
 
     private func purchase() async {
@@ -233,8 +297,10 @@ struct PaywallView: View {
         if let error = await store.leaveCurrentCrewAndContinue(context: ctx) {
             statusMessage = error
             isWorking = false
+            confirmLeave = false
             return
         }
+        confirmLeave = false
         switch ctx {
         case .create:
             dismiss()

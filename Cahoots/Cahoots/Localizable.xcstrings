@@ -33,6 +33,26 @@
         }
       }
     },
+    "%@ / %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ / %2$@"
+          }
+        }
+      }
+    },
+    "%@ / %@ · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ / %2$@ · %3$@"
+          }
+        }
+      }
+    },
     "%@ %@" : {
       "localizations" : {
         "en" : {
@@ -214,6 +234,9 @@
     "%lld mins" : {
 
     },
+    "%lld months" : {
+
+    },
     "%lld of %lld done · %@" : {
       "localizations" : {
         "en" : {
@@ -282,7 +305,37 @@
     "%lld seconds" : {
 
     },
+    "%lld weeks" : {
+
+    },
+    "%lld years" : {
+
+    },
     "%lld-day streak" : {
+
+    },
+    "%lld-day trial" : {
+
+    },
+    "%lld-month trial" : {
+
+    },
+    "%lld-week trial" : {
+
+    },
+    "%lld-year trial" : {
+
+    },
+    "%lldnd" : {
+
+    },
+    "%lldrd" : {
+
+    },
+    "%lldst" : {
+
+    },
+    "%lldth" : {
 
     },
     "+%lld" : {
@@ -304,12 +357,6 @@
         }
       }
     },
-    "$4.99 / month" : {
-
-    },
-    "$29.99 / year · 7-day trial" : {
-
-    },
     "0" : {
 
     },
@@ -325,6 +372,15 @@
     "1 recovery day" : {
 
     },
+    "1-day trial" : {
+
+    },
+    "1-month trial" : {
+
+    },
+    "1-year trial" : {
+
+    },
     "3 workouts this week" : {
 
     },
@@ -332,6 +388,9 @@
 
     },
     "4/4 agreed" : {
+
+    },
+    "7-day trial" : {
 
     },
     "A check-in is still open" : {
@@ -349,7 +408,13 @@
     "A scheduled round begins today. Open Today to get ready." : {
 
     },
+    "A short clip for the crew." : {
+
+    },
     "A short clip for the crew. You enter the number — this round is honour system." : {
+
+    },
+    "A short clip now, and one when you finish." : {
 
     },
     "A tie fails. Voting also closes early after every eligible member votes." : {
@@ -374,9 +439,6 @@
 
     },
     "Admin changed to member." : {
-
-    },
-    "All members will lose access. Rounds, votes, and activity for this group will be permanently removed." : {
 
     },
     "All-time · %@ %@" : {
@@ -470,9 +532,6 @@
 
     },
     "Challenge results" : {
-
-    },
-    "Challenge title" : {
 
     },
     "Check in to reveal" : {
@@ -661,22 +720,22 @@
     "Daily target" : {
 
     },
+    "day" : {
+
+    },
     "Day %lld of %lld" : {
 
     },
     "day streak" : {
 
     },
+    "Decrease by %lld" : {
+
+    },
     "Delete account" : {
 
     },
     "Delete group" : {
-
-    },
-    "Delete this group?" : {
-
-    },
-    "Delete your account?" : {
 
     },
     "Deletes this group for everyone, including rounds and activity. This cannot be undone." : {
@@ -779,13 +838,7 @@
         }
       }
     },
-    "Film a finish clip for the crew, or skip and enter today’s amount only." : {
-
-    },
-    "Film a short clip for the crew, or skip and enter today’s amount only. This round is honour system." : {
-
-    },
-    "Film short clips for the crew, or skip and enter today’s amount only. This round is honour system." : {
+    "Film a finish clip for the crew." : {
 
     },
     "Film your set" : {
@@ -807,6 +860,9 @@
 
     },
     "Free includes one crew. Plus unlocks up to ten." : {
+
+    },
+    "Free trial" : {
 
     },
     "Friend activity" : {
@@ -867,6 +923,9 @@
 
     },
     "Immediate" : {
+
+    },
+    "Increase by %lld" : {
 
     },
     "Invitation from %@" : {
@@ -936,10 +995,16 @@
     "Leave %@ and join instead" : {
 
     },
-    "Leave group" : {
+    "Leave %@ to create another crew?" : {
 
     },
-    "Leave this group?" : {
+    "Leave %@ to join another crew?" : {
+
+    },
+    "Leave %@?" : {
+
+    },
+    "Leave group" : {
 
     },
     "Leave without saving" : {
@@ -1008,6 +1073,9 @@
     "Missed today’s window" : {
 
     },
+    "month" : {
+
+    },
     "Monthly" : {
 
     },
@@ -1025,6 +1093,9 @@
       }
     },
     "Name" : {
+
+    },
+    "Name this round" : {
 
     },
     "Need a rest day?" : {
@@ -1126,6 +1197,9 @@
     "Open Settings" : {
 
     },
+    "Open Settings → Apple ID → Subscriptions to manage Plus." : {
+
+    },
     "or" : {
 
     },
@@ -1156,6 +1230,9 @@
     "People you block will appear here." : {
 
     },
+    "period" : {
+
+    },
     "Play" : {
 
     },
@@ -1169,6 +1246,9 @@
 
     },
     "Plus isn’t available to purchase yet." : {
+
+    },
+    "Plus plans aren’t available right now. Check your connection and try again." : {
 
     },
     "Plus restored." : {
@@ -1214,6 +1294,12 @@
 
     },
     "Proposed by %@" : {
+
+    },
+    "Purchase finished, but Plus isn’t active yet. Try Restore purchases." : {
+
+    },
+    "Purchase succeeded, but we couldn’t unlock Plus on your account. Check your connection and tap Restore purchases." : {
 
     },
     "Put to vote" : {
@@ -1425,9 +1511,6 @@
     "Sign out" : {
 
     },
-    "Sign out of Cahoots?" : {
-
-    },
     "Skip countdown" : {
 
     },
@@ -1631,9 +1714,6 @@
     "This round is no longer available." : {
 
     },
-    "This starts permanent deletion of your profile and private group data. This cannot be undone." : {
-
-    },
     "Tide" : {
 
     },
@@ -1664,10 +1744,16 @@
     "Today’s challenge closes soon" : {
 
     },
+    "Today’s check-in deadline has already passed. Move the deadline later, or start tomorrow." : {
+
+    },
     "Today’s check-in window is closed." : {
 
     },
     "Today’s crew" : {
+
+    },
+    "Today’s target" : {
 
     },
     "Transfer ownership" : {
@@ -1724,7 +1810,7 @@
     "Vote now" : {
 
     },
-    "Vote opened, vote closing soon, and round starting alerts for this crew." : {
+    "Vote opened, vote closing soon, and round starting alerts delivered as pushes for this crew." : {
 
     },
     "Voted" : {
@@ -1754,6 +1840,9 @@
     "Waiting on the crew" : {
 
     },
+    "week" : {
+
+    },
     "Welcome aboard — this crew has an open vote." : {
 
     },
@@ -1770,6 +1859,9 @@
 
     },
     "Workout complete" : {
+
+    },
+    "year" : {
 
     },
     "You" : {
@@ -1817,6 +1909,25 @@
     "You will lose access to this group’s rounds and activity." : {
 
     },
+    "You’ll leave this crew and join the invited one. You won’t stay in both." : {
+
+    },
+    "You’ll leave this crew, then start a new one. You won’t stay in both." : {
+
+    },
+    "You’ll lose access to this crew’s rounds and activity." : {
+
+    },
+    "You’re %@ · %lld pts" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You’re %1$@ · %2$lld pts"
+          }
+        }
+      }
+    },
     "You’re first today." : {
 
     },
@@ -1848,6 +1959,9 @@
 
     },
     "Your crew needs your vote before the proposal closes." : {
+
+    },
+    "your current crew" : {
 
     },
     "Your draft can be resumed for this group later." : {

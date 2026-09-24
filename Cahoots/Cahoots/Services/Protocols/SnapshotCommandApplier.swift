@@ -91,7 +91,7 @@ enum SnapshotCommandApplier {
             guard let group = snapshot.groups.first(where: { $0.id == groupID }) else {
                 throw RepositoryError.server("Group not found.")
             }
-            try validateChallengeDraft(draft, snapshot: snapshot, group: group)
+            try validateChallengeDraft(draft, snapshot: snapshot, group: group, now: now)
             let title = TextSanitizer.clean(draft.title, maximumLength: 52)
             let memberIDs = Set(snapshot.memberships.filter { $0.groupID == groupID && $0.status == .active }.map(\.userID))
             let proposal = ChallengeProposal(
@@ -115,7 +115,7 @@ enum SnapshotCommandApplier {
             guard let group = snapshot.groups.first(where: { $0.id == groupID }) else {
                 throw RepositoryError.server("Group not found.")
             }
-            try validateChallengeDraft(draft, snapshot: snapshot, group: group)
+            try validateChallengeDraft(draft, snapshot: snapshot, group: group, now: now)
             let title = TextSanitizer.clean(draft.title, maximumLength: 52)
             let challenge = ChallengeFactory.makeChallenge(
                 groupID: group.id, title: title,
@@ -318,12 +318,22 @@ enum SnapshotCommandApplier {
         return (snapshot, invite)
     }
 
-    private static func validateChallengeDraft(_ draft: ProposalDraft, snapshot: DemoSnapshot, group: CahootsGroup) throws {
+    private static func validateChallengeDraft(_ draft: ProposalDraft, snapshot: DemoSnapshot, group: CahootsGroup, now: Date) throws {
         if snapshot.proposals.contains(where: { $0.groupID == group.id && $0.status == .voting }) {
             throw RepositoryError.server("This group already has a vote in progress.")
         }
         if snapshot.challenges.contains(where: { $0.groupID == group.id && $0.status == .scheduled }) {
             throw RepositoryError.server("This group already has its next round scheduled.")
+        }
+        if ScheduleEngine.firstCheckInAlreadyClosed(
+            startDate: draft.startDate,
+            deadlineMinutes: draft.deadlineMinutes,
+            timeZoneIdentifier: draft.timezone,
+            frequencyType: draft.frequencyType,
+            scheduledWeekdays: draft.scheduledWeekdays,
+            now: now
+        ) {
+            throw RepositoryError.server(ScheduleEngine.firstCheckInClosedMessage)
         }
         let title = TextSanitizer.clean(draft.title, maximumLength: 52)
         guard !title.isEmpty, draft.minimumQuantity > 0, !draft.scheduledWeekdays.isEmpty,

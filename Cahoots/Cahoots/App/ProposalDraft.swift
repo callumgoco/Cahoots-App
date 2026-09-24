@@ -8,7 +8,7 @@ struct ProposalDraft: Codable, Hashable, Sendable {
     var frequencyType: FrequencyType = .daily
     var scheduledWeekdays: Set<Int> = Set(1...7)
     var durationDays = 30
-    var startDate = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: .now)) ?? .now
+    var startDate = Calendar.current.startOfDay(for: .now)
     var deadlineMinutes = 21 * 60
     var timezone = TimeZone.current.identifier
     var recoveryDays = 1

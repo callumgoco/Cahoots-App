@@ -316,6 +316,13 @@ struct NotificationPlanningTests {
         #expect(!body.contains("15"))
         #expect(CrewUpdateCopy.roundStartedBody(title: "Push-ups").localizedCaseInsensitiveContains("started"))
     }
+
+    @Test func liveModeSkipsOnDeviceLocalPlan() {
+        let now = Date.now
+        let snapshot = DemoSeed.make(now: now)
+        #expect(NotificationDelivery.localPlan(mode: .live, snapshot: snapshot, now: now).isEmpty)
+        #expect(!NotificationDelivery.localPlan(mode: .demo, snapshot: snapshot, now: now).isEmpty)
+    }
 }
 
 @MainActor

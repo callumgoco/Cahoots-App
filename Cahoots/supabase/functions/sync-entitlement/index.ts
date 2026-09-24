@@ -2,9 +2,23 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, json } from "../_shared/cors.ts";
 import {
   applyEntitlementToUser,
-  decodeJWSPayload,
   entitlementFromTransaction,
+  requireAppleBundleID,
+  verifyAndDecodeAppleJWS,
 } from "../_shared/entitlements.ts";
+
+const CLIENT_ERRORS = new Set([
+  "invalid_jws",
+  "jws_missing_x5c",
+  "jws_unsupported_alg",
+  "jws_untrusted_root",
+  "jws_invalid_chain",
+  "jws_cert_expired",
+  "jws_signature_invalid",
+  "bundle_mismatch",
+  "unknown_product",
+  "apple_bundle_id_missing",
+]);
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -24,8 +38,9 @@ Deno.serve(async (request) => {
     const signedTransaction = String(body.signedTransaction ?? body.signed_transaction ?? "");
     if (!signedTransaction) return json({ message: "signedTransaction is required" }, 422);
 
-    const tx = decodeJWSPayload(signedTransaction);
-    const fields = entitlementFromTransaction(tx, Deno.env.get("APPLE_BUNDLE_ID") ?? undefined);
+    const bundleID = requireAppleBundleID();
+    const tx = await verifyAndDecodeAppleJWS(signedTransaction);
+    const fields = entitlementFromTransaction(tx, bundleID);
 
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!serviceKey) return json({ message: "Server misconfigured" }, 500);
@@ -51,7 +66,7 @@ Deno.serve(async (request) => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error";
-    const status = ["invalid_jws", "bundle_mismatch", "unknown_product"].includes(message) ? 422 : 500;
+    const status = CLIENT_ERRORS.has(message) ? 422 : 500;
     return json({ message }, status);
   }
 });

@@ -9,9 +9,7 @@ struct WorkoutSessionRevealView: View {
     @ScaledMetric(relativeTo: .largeTitle) private var accessibilityPointsSize: CGFloat = 56
 
     var body: some View {
-        ZStack {
-            backdrop
-            ScrollView {
+        ScrollView {
                 VStack(spacing: AppSpacing.large) {
                     CahootsCard(elevated: true) {
                         VStack(spacing: AppSpacing.extraLarge) {
@@ -70,27 +68,8 @@ struct WorkoutSessionRevealView: View {
                 }
                 .padding(AppSpacing.page)
                 .padding(.vertical, AppSpacing.large)
-            }
         }
-    }
-
-    private var backdrop: some View {
-        ZStack {
-            AppColors.page.ignoresSafeArea()
-            if let previewURL = controller.previewURL, FileManager.default.fileExists(atPath: previewURL.path) {
-                VideoPlayerRepresentable(url: previewURL)
-                    .ignoresSafeArea()
-                    .blur(radius: 28)
-                    .opacity(0.45)
-                    .allowsHitTesting(false)
-            }
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .ignoresSafeArea()
-            Color.black.opacity(0.18)
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
-        }
+        .roundPage()
     }
 }
 

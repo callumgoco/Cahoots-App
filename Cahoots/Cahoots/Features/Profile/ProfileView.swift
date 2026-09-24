@@ -53,7 +53,7 @@ struct ProfileView: View {
                             .frame(minHeight: 44)
                             Divider()
                             Button("Manage subscription") {
-                                store.presentPaywall(.manage)
+                                Task { await store.openManageSubscriptions() }
                             }
                             .font(.body.weight(.semibold))
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -160,14 +160,24 @@ struct ProfileView: View {
             } message: {
                 Text("Start a new crew or join one with an invite code.")
             }
-            .alert("Sign out of Cahoots?", isPresented: $showSignOut) {
-                Button("Sign out", role: .destructive) { Task { await store.signOutAsync() } }
-                Button("Cancel", role: .cancel) {}
+            .sheet(isPresented: $showSignOut) {
+                CahootsConfirmationSheet(
+                    title: "Sign out of Cahoots?",
+                    message: "You’ll need to sign in again to get back to your crews.",
+                    confirmTitle: "Sign out",
+                    onConfirm: { showSignOut = false; Task { await store.signOutAsync() } },
+                    onCancel: { showSignOut = false }
+                )
             }
-            .alert("Delete your account?", isPresented: $showDelete) {
-                Button("Delete account", role: .destructive) { Task { await store.deleteAccount() } }
-                Button("Cancel", role: .cancel) {}
-            } message: { Text("This starts permanent deletion of your profile and private group data. This cannot be undone.") }
+            .sheet(isPresented: $showDelete) {
+                CahootsConfirmationSheet(
+                    title: "Delete your account?",
+                    message: "This starts permanent deletion of your profile and private group data. This cannot be undone.",
+                    confirmTitle: "Delete account",
+                    onConfirm: { showDelete = false; Task { await store.deleteAccount() } },
+                    onCancel: { showDelete = false }
+                )
+            }
         }
     }
 
@@ -360,7 +370,7 @@ struct NotificationSettingsView: View {
                             Toggle("Votes & round updates", isOn: groupBinding(group.id, \.challengeUpdatesEnabled))
                                 .frame(minHeight: 44)
                                 .accessibilityIdentifier("notifications.challengeUpdates.\(group.id.uuidString)")
-                            Text("Vote opened, vote closing soon, and round starting alerts for this crew.")
+                            Text("Vote opened, vote closing soon, and round starting alerts delivered as pushes for this crew.")
                                 .font(.caption)
                                 .foregroundStyle(AppColors.secondaryInk)
                             Divider()

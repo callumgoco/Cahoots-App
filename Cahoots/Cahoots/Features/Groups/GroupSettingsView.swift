@@ -127,14 +127,30 @@ struct GroupSettingsView: View {
             Button("Generate new invitation") { Task { replacementInvite = await store.regenerateCurrentInvite() } }
             Button("Cancel", role: .cancel) {}
         } message: { Text("The previous code and QR link will stop working immediately.") }
-        .alert("Leave this group?", isPresented: $confirmLeave) {
-            Button("Leave group", role: .destructive) { Task { if await store.leaveCurrentGroup() { dismiss() } } }
-            Button("Cancel", role: .cancel) {}
-        } message: { Text("You will lose access to this group’s rounds and activity.") }
-        .alert("Delete this group?", isPresented: $confirmDelete) {
-            Button("Delete group", role: .destructive) { Task { if await store.deleteCurrentGroup() { dismiss() } } }
-            Button("Cancel", role: .cancel) {}
-        } message: { Text("All members will lose access. Rounds, votes, and activity for this group will be permanently removed.") }
+        .sheet(isPresented: $confirmLeave) {
+            CahootsConfirmationSheet(
+                title: "Leave this group?",
+                message: "You will lose access to this group’s rounds and activity.",
+                confirmTitle: "Leave group",
+                onConfirm: {
+                    confirmLeave = false
+                    Task { if await store.leaveCurrentGroup() { dismiss() } }
+                },
+                onCancel: { confirmLeave = false }
+            )
+        }
+        .sheet(isPresented: $confirmDelete) {
+            CahootsConfirmationSheet(
+                title: "Delete this group?",
+                message: "All members will lose access. Rounds, votes, and activity for this group will be permanently removed.",
+                confirmTitle: "Delete group",
+                onConfirm: {
+                    confirmDelete = false
+                    Task { if await store.deleteCurrentGroup() { dismiss() } }
+                },
+                onCancel: { confirmDelete = false }
+            )
+        }
         .onAppear {
             name = store.currentGroup?.name ?? ""
             emoji = store.currentGroup?.emoji ?? "⚡️"

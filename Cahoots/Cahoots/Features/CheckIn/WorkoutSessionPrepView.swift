@@ -75,26 +75,36 @@ struct WorkoutSessionPrepView: View {
                         .multilineTextAlignment(.center)
                 }
 
-                Button("Start") { controller.beginCountdown(reduceMotion: reduceMotion) }
-                    .font(.headline)
-                    .foregroundStyle(.white.opacity(controller.canStartCaptureActions ? 1 : 0.7))
-                    .frame(maxWidth: .infinity, minHeight: 54)
-                    .background(
-                        Capsule()
-                            .fill(Color.white.opacity(controller.canStartCaptureActions ? 0.32 : 0.18))
-                    )
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(Color.white.opacity(controller.canStartCaptureActions ? 0.85 : 0.45), lineWidth: 1.5)
-                    )
-                    .disabled(!controller.canStartCaptureActions)
-                    .accessibilityIdentifier("workoutSession.start")
-                Button("Skip countdown") { controller.beginAutoRecording() }
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .disabled(!controller.canStartCaptureActions)
-                    .accessibilityIdentifier("workoutSession.skipCountdown")
+                Button {
+                    controller.beginCountdown(reduceMotion: reduceMotion)
+                } label: {
+                    Text("Start")
+                        .font(.headline)
+                        .foregroundStyle(.white.opacity(controller.canStartCaptureActions ? 1 : 0.7))
+                        .frame(maxWidth: .infinity, minHeight: 54)
+                        .background(
+                            Capsule()
+                                .fill(Color.white.opacity(controller.canStartCaptureActions ? 0.32 : 0.18))
+                        )
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(Color.white.opacity(controller.canStartCaptureActions ? 0.85 : 0.45), lineWidth: 1.5)
+                        )
+                        .contentShape(Capsule())
+                }
+                .disabled(!controller.canStartCaptureActions)
+                .accessibilityIdentifier("workoutSession.start")
+                Button {
+                    controller.beginAutoRecording()
+                } label: {
+                    Text("Skip countdown")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .disabled(!controller.canStartCaptureActions)
+                .accessibilityIdentifier("workoutSession.skipCountdown")
             }
             .padding(AppSpacing.page)
             .padding(.bottom, AppSpacing.medium)
@@ -107,6 +117,7 @@ struct WorkoutSessionPrepView: View {
                 )
             )
         }
+        .onAppear { CaptureTiming.logSinceRecord("prep view appeared") }
     }
 
     private var flipCameraButton: some View {

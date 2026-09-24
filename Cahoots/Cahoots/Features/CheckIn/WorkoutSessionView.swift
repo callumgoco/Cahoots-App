@@ -11,14 +11,15 @@ struct WorkoutSessionView: View {
         @Bindable var controller = controller
         NavigationStack {
             ZStack {
-                if controller.showsCameraPreview {
+                if controller.keepsCameraMounted {
                     cameraBackground
                 }
                 phaseContent
             }
             .navigationTitle(controller.navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(controller.showsCameraPreview ? .hidden : .automatic, for: .navigationBar)
+            .toolbarBackground(controller.showsCameraPreview ? .hidden : .visible, for: .navigationBar)
+            .toolbarBackground(AppColors.page, for: .navigationBar)
             .toolbarColorScheme(controller.showsCameraPreview ? .dark : nil, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -41,9 +42,10 @@ struct WorkoutSessionView: View {
 
     @ViewBuilder
     private var cameraBackground: some View {
-        CameraPreviewRepresentable(layer: controller.capture?.previewLayer)
+        CameraPreviewRepresentable(session: controller.captureSession, position: controller.cameraPosition)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .ignoresSafeArea()
-        if controller.capture?.isUsingStub == true {
+        if controller.usesStubCapture {
             Color.black.opacity(0.85).ignoresSafeArea()
             Text("Camera preview (stub)")
                 .font(.title3.bold())

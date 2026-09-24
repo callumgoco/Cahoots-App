@@ -9,10 +9,7 @@ struct WorkoutSessionConfirmView: View {
     @ScaledMetric(relativeTo: .largeTitle) private var accessibilityAmountSize: CGFloat = 56
 
     var body: some View {
-        ZStack {
-            confirmBackdrop
-
-            VStack(spacing: 0) {
+        VStack(spacing: 0) {
                 ScrollView {
                     CahootsCard(elevated: true) {
                         VStack(spacing: AppSpacing.extraLarge) {
@@ -94,33 +91,39 @@ struct WorkoutSessionConfirmView: View {
                         || !WorkoutClipRules.areSubmittable(controller.recordedClips, for: store.currentChallenge?.measurementType ?? .repetitions)
                 )
                 .accessibilityIdentifier("checkIn.submit")
-                .cahootsSheetFooter()
-            }
+                .padding(.horizontal, AppSpacing.page)
+                .padding(.top, AppSpacing.medium)
+                .padding(.bottom, AppSpacing.page)
+                .background(AppColors.page)
         }
+        .roundPage()
         .interactiveKeyboardDismiss()
         .onAppear {
             controller.ensureClosedWindowErrorIfNeeded()
         }
     }
 
-    private var confirmBackdrop: some View {
-        ZStack {
-            AppColors.page.ignoresSafeArea()
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .ignoresSafeArea()
-            Color.black.opacity(0.12)
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
-        }
-    }
-
     private func incrementButton(_ title: String, change: Double) -> some View {
         Button(title) { controller.adjustAmount(change) }
-            .font(.title2.bold().monospacedDigit())
-            .frame(maxWidth: .infinity, minHeight: 64)
-            .foregroundStyle(AppColors.ink)
-            .environment(\.colorScheme, .dark)
-            .background(AppColors.raised, in: RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous))
+            .buttonStyle(AmountStepButtonStyle())
+            .accessibilityLabel(change < 0 ? "Decrease by \(Int(abs(change)))" : "Increase by \(Int(change))")
+    }
+}
+
+/// Steppers on the dark amount card. A mint fill and edge make them read as controls.
+private struct AmountStepButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.title3.bold().monospacedDigit())
+            .frame(maxWidth: .infinity, minHeight: 52)
+            .foregroundStyle(AppColors.onInk)
+            .background(
+                AppColors.ink.opacity(configuration.isPressed ? 0.78 : 1),
+                in: RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous)
+            )
+            .scaleEffect(!reduceMotion && configuration.isPressed ? 0.97 : 1)
+            .animation(reduceMotion ? nil : AppMotion.responsive, value: configuration.isPressed)
     }
 }

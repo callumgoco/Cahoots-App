@@ -3,9 +3,15 @@ import UIKit
 import UserNotifications
 
 final class CahootsAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    /// Held until `store` is attached so a cold-start tap is not dropped.
+    private var pendingNotificationUserInfo: [AnyHashable: Any]?
+
     weak var store: AppStore? {
         didSet {
             UNUserNotificationCenter.current().delegate = self
+            Task { @MainActor in
+                self.flushPendingNotificationTapIfNeeded()
+            }
         }
     }
 
@@ -47,7 +53,18 @@ final class CahootsAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificat
     ) async {
         let userInfo = response.notification.request.content.userInfo
         await MainActor.run {
-            store?.handleNotificationUserInfo(userInfo)
+            if let store {
+                store.handleNotificationUserInfo(userInfo)
+            } else {
+                pendingNotificationUserInfo = userInfo
+            }
         }
+    }
+
+    @MainActor
+    private func flushPendingNotificationTapIfNeeded() {
+        guard let store, let userInfo = pendingNotificationUserInfo else { return }
+        pendingNotificationUserInfo = nil
+        store.handleNotificationUserInfo(userInfo)
     }
 }

@@ -270,6 +270,31 @@ enum ScheduleEngine {
         }
     }
 
+    /// True when the chosen start day is today in the round timezone, that day is a check-in day, and its deadline has already passed.
+    static func firstCheckInAlreadyClosed(
+        startDate: Date,
+        deadlineMinutes: Int,
+        timeZoneIdentifier: String,
+        frequencyType: FrequencyType,
+        scheduledWeekdays: Set<Int>,
+        now: Date
+    ) -> Bool {
+        guard let timezone = TimeZone(identifier: timeZoneIdentifier) else { return false }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timezone
+        let startDay = calendar.startOfDay(for: startDate)
+        let today = calendar.startOfDay(for: now)
+        guard startDay == today else { return false }
+        let scheduled = switch frequencyType {
+        case .daily, .timesPerWeek: true
+        case .selectedWeekdays: scheduledWeekdays.contains(calendar.component(.weekday, from: today))
+        }
+        guard scheduled, let deadline = calendar.date(byAdding: .minute, value: deadlineMinutes, to: today) else { return false }
+        return now > deadline
+    }
+
+    static let firstCheckInClosedMessage = String(localized: "Today’s check-in deadline has already passed. Move the deadline later, or start tomorrow.")
+
     static func deadline(for requirementDate: Date, challenge: CahootsChallenge) -> Date? {
         guard let calendar = calendar(for: challenge) else { return nil }
         let start = calendar.startOfDay(for: requirementDate)

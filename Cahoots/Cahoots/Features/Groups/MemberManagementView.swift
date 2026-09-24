@@ -8,6 +8,7 @@ struct MemberManagementView: View {
     @State private var removeUser: CahootsUser?
     @State private var blockUser: CahootsUser?
     @State private var confirmLeave = false
+    @State private var pendingRole: PendingRoleChange?
 
     var body: some View {
         ScrollView {
@@ -26,9 +27,9 @@ struct MemberManagementView: View {
                                     if store.currentMembership?.role == .owner {
                                         Button("Transfer ownership", systemImage: "crown") { transferUser = user }
                                         if role(for: user) == .admin {
-                                            Button("Make member", systemImage: "person") { Task { await store.setRole(.member, for: user.id) } }
+                                            Button("Make member", systemImage: "person") { pendingRole = PendingRoleChange(user: user, role: .member) }
                                         } else {
-                                            Button("Make admin", systemImage: "person.badge.shield.checkmark") { Task { await store.setRole(.admin, for: user.id) } }
+                                            Button("Make admin", systemImage: "person.badge.shield.checkmark") { pendingRole = PendingRoleChange(user: user, role: .admin) }
                                         }
                                     }
                                     if canRemove(user) {
@@ -90,10 +91,35 @@ struct MemberManagementView: View {
             }
             Button("Cancel", role: .cancel) { blockUser = nil }
         } message: { Text("Their activity will be hidden. You can unblock them later in Safety & privacy.") }
-        .alert("Leave this group?", isPresented: $confirmLeave) {
-            Button("Leave group", role: .destructive) { Task { if await store.leaveCurrentGroup() { dismiss() } } }
-            Button("Cancel", role: .cancel) {}
-        } message: { Text("You will lose access to this group’s rounds and activity.") }
+        .sheet(isPresented: $confirmLeave) {
+            CahootsConfirmationSheet(
+                title: "Leave this group?",
+                message: "You will lose access to this group’s rounds and activity.",
+                confirmTitle: "Leave group",
+                onConfirm: {
+                    confirmLeave = false
+                    Task { if await store.leaveCurrentGroup() { dismiss() } }
+                },
+                onCancel: { confirmLeave = false }
+            )
+        }
+        .sheet(item: $pendingRole) { change in
+            CahootsConfirmationSheet(
+                title: change.role == .admin ? "Make \(change.user.displayName) an admin?" : "Change \(change.user.displayName) to a member?",
+                message: change.role == .admin
+                    ? "Admins can invite people, remove members, and manage the invitation."
+                    : "They will lose admin permissions for this crew.",
+                confirmTitle: change.role == .admin ? "Make admin" : "Make member",
+                isDestructive: change.role != .admin,
+                onConfirm: {
+                    let userID = change.user.id
+                    let role = change.role
+                    pendingRole = nil
+                    Task { await store.setRole(role, for: userID) }
+                },
+                onCancel: { pendingRole = nil }
+            )
+        }
     }
 
     private func role(for user: CahootsUser) -> GroupRole {
@@ -105,6 +131,12 @@ struct MemberManagementView: View {
         if store.currentMembership?.role == .owner { return true }
         return store.currentMembership?.role == .admin && role(for: user) == .member
     }
+}
+
+private struct PendingRoleChange: Identifiable {
+    let user: CahootsUser
+    let role: GroupRole
+    var id: UUID { user.id }
 }
 
 struct ReportMemberView: View {

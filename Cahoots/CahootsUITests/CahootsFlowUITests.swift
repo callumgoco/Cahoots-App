@@ -44,10 +44,7 @@ final class CahootsFlowUITests: XCTestCase {
 
         app.buttons["today.logWorkout"].tap()
         XCTAssertTrue(app.buttons["workoutSession.chooseRecord"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(
-            format: "label CONTAINS %@",
-            "honour system"
-        )).firstMatch.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Today’s target"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(
             format: "label CONTAINS %@",
             "short clip for the crew"

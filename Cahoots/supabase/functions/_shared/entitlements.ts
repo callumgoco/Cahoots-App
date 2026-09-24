@@ -1,19 +1,107 @@
+import { compactVerify, decodeProtectedHeader, importX509 } from "jsr:@panva/jose@6.2.12";
+import * as x509 from "npm:@peculiar/x509@1.12.3";
+
 export const PLUS_PRODUCT_IDS = new Set([
   "cahoots_plus_monthly",
   "cahoots_plus_annual",
 ]);
 
-/** Decode the payload segment of a JWS (StoreKit transaction / ASN) without verifying the signature chain. */
-export function decodeJWSPayload(jws: string): Record<string, unknown> {
-  const parts = jws.split(".");
-  if (parts.length < 2) throw new Error("invalid_jws");
-  const padded = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-  const json = atob(padded.padEnd(padded.length + (4 - (padded.length % 4)) % 4, "="));
-  return JSON.parse(json) as Record<string, unknown>;
+/** Apple Root CA - G3 (https://www.apple.com/certificateauthority/AppleRootCA-G3.cer). */
+const APPLE_ROOT_CA_G3_PEM = `-----BEGIN CERTIFICATE-----
+MIICQzCCAcmgAwIBAgIILcX8iNLFS5UwCgYIKoZIzj0EAwMwZzEbMBkGA1UEAwwS
+QXBwbGUgUm9vdCBDQSAtIEczMSYwJAYDVQQLDB1BcHBsZSBDZXJ0aWZpY2F0aW9u
+IEF1dGhvcml0eTETMBEGA1UECgwKQXBwbGUgSW5jLjELMAkGA1UEBhMCVVMwHhcN
+MTQwNDMwMTgxOTA2WhcNMzkwNDMwMTgxOTA2WjBnMRswGQYDVQQDDBJBcHBsZSBS
+b290IENBIC0gRzMxJjAkBgNVBAsMHUFwcGxlIENlcnRpZmljYXRpb24gQXV0aG9y
+aXR5MRMwEQYDVQQKDApBcHBsZSBJbmMuMQswCQYDVQQGEwJVUzB2MBAGByqGSM49
+AgEGBSuBBAAiA2IABJjpLz1AcqTtkyJygRMc3RCV8cWjTnHcFBbZDuWmBSp3ZHtf
+TjjTuxxEtX/1H7YyYl3J6YRbTzBPEVoA/VhYDKX1DyxNB0cTddqXl5dvMVztK517
+IDvYuVTZXpmkOlEKMaNCMEAwHQYDVR0OBBYEFLuw3qFYM4iapIqZ3r6966/ayySr
+MA8GA1UdEwEB/wQFMAMBAf8wDgYDVR0PAQH/BAQDAgEGMAoGCCqGSM49BAMDA2gA
+MGUCMQCD6cHEFl4aXTQY2e3v9GwOAEZLuN+yRhHFD/3meoyhpmvOwgPUnPWTxnS4
+at+qIxUCMG1mihDK1A3UT82NQz60imOlM27jbdoXt2QfyFMm+YhidDkLF1vLUagM
+6BgD56KyKA==
+-----END CERTIFICATE-----`;
+
+function pemFromDerBase64(derBase64: string): string {
+  const body = derBase64.replace(/\s+/g, "").match(/.{1,64}/g)?.join("\n") ?? derBase64;
+  return `-----BEGIN CERTIFICATE-----\n${body}\n-----END CERTIFICATE-----`;
 }
 
-export function entitlementFromTransaction(tx: Record<string, unknown>, bundleID: string | undefined) {
-  if (bundleID && tx.bundleId && String(tx.bundleId) !== bundleID) {
+function bytesEqual(a: ArrayBuffer, b: ArrayBuffer): boolean {
+  if (a.byteLength !== b.byteLength) return false;
+  const aa = new Uint8Array(a);
+  const bb = new Uint8Array(b);
+  let diff = 0;
+  for (let i = 0; i < aa.length; i++) diff |= aa[i]! ^ bb[i]!;
+  return diff === 0;
+}
+
+/** Require APPLE_BUNDLE_ID so forged payloads cannot skip the bundle check. */
+export function requireAppleBundleID(): string {
+  const id = Deno.env.get("APPLE_BUNDLE_ID")?.trim();
+  if (!id) throw new Error("apple_bundle_id_missing");
+  return id;
+}
+
+/**
+ * Verify an Apple-issued JWS (StoreKit transaction or ASN V2 payload) against
+ * the embedded x5c chain rooted at Apple Root CA - G3, then return the payload.
+ */
+export async function verifyAndDecodeAppleJWS(jws: string): Promise<Record<string, unknown>> {
+  const parts = jws.split(".");
+  if (parts.length !== 3) throw new Error("invalid_jws");
+
+  let header: ReturnType<typeof decodeProtectedHeader>;
+  try {
+    header = decodeProtectedHeader(jws);
+  } catch {
+    throw new Error("invalid_jws");
+  }
+
+  const x5c = header.x5c;
+  if (!Array.isArray(x5c) || x5c.length < 1) throw new Error("jws_missing_x5c");
+  if (header.alg !== "ES256") throw new Error("jws_unsupported_alg");
+
+  const appleRoot = new x509.X509Certificate(APPLE_ROOT_CA_G3_PEM);
+  const chain = x5c.map((der) => new x509.X509Certificate(pemFromDerBase64(String(der))));
+
+  // Ensure the chain terminates at the pinned Apple Root CA - G3.
+  const last = chain[chain.length - 1]!;
+  const rooted =
+    bytesEqual(last.rawData, appleRoot.rawData)
+      ? chain
+      : [...chain, appleRoot];
+
+  if (!bytesEqual(rooted[rooted.length - 1]!.rawData, appleRoot.rawData)) {
+    throw new Error("jws_untrusted_root");
+  }
+
+  const now = new Date();
+  for (let i = 0; i < rooted.length - 1; i++) {
+    const subject = rooted[i]!;
+    const issuer = rooted[i + 1]!;
+    if (subject.notBefore > now || subject.notAfter < now) {
+      throw new Error("jws_cert_expired");
+    }
+    const ok = await subject.verify({ publicKey: await issuer.publicKey }, crypto);
+    if (!ok) throw new Error("jws_invalid_chain");
+  }
+
+  try {
+    const leafKey = await importX509(pemFromDerBase64(String(x5c[0])), "ES256");
+    const { payload } = await compactVerify(jws, leafKey);
+    const text = new TextDecoder().decode(payload);
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("jws_")) throw error;
+    throw new Error("jws_signature_invalid");
+  }
+}
+
+export function entitlementFromTransaction(tx: Record<string, unknown>, bundleID: string) {
+  if (!bundleID) throw new Error("apple_bundle_id_missing");
+  if (!tx.bundleId || String(tx.bundleId) !== bundleID) {
     throw new Error("bundle_mismatch");
   }
   const productId = String(tx.productId ?? "");

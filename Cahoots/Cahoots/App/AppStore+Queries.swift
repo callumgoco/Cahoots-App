@@ -221,7 +221,7 @@ extension AppStore {
         let now = environment.clock.now
         guard let active = currentChallenge, active.status == .active,
               let calendar = ScheduleEngine.calendar(for: active) else {
-            return Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: now)) ?? now
+            return Calendar.current.startOfDay(for: now)
         }
         return calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: active.endDate)) ?? active.endDate
     }

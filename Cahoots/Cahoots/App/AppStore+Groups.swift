@@ -114,6 +114,17 @@ extension AppStore {
             errorBanner = String(localized: "The next round must start after \(active.title) ends.")
             return false
         }
+        if ScheduleEngine.firstCheckInAlreadyClosed(
+            startDate: draft.startDate,
+            deadlineMinutes: draft.deadlineMinutes,
+            timeZoneIdentifier: draft.timezone,
+            frequencyType: draft.frequencyType,
+            scheduledWeekdays: draft.scheduledWeekdays,
+            now: environment.clock.now
+        ) {
+            errorBanner = ScheduleEngine.firstCheckInClosedMessage
+            return false
+        }
         let title = TextSanitizer.clean(draft.title, maximumLength: 52)
         guard !title.isEmpty, draft.minimumQuantity > 0, !draft.scheduledWeekdays.isEmpty,
               (7...90).contains(draft.durationDays), (0...4).contains(draft.recoveryDays) else {

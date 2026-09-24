@@ -50,11 +50,13 @@ struct MonetizationTests {
         let service = FreeEntitlementService()
         #expect(await service.currentEntitlement() == .free)
         #expect(await service.membershipLimit() == 1)
+        #expect(await service.plusProductOffers().isEmpty)
     }
 
     @Test func plusEntitlementServiceReturnsPlus() async {
         let service = PlusEntitlementService()
         #expect(await service.currentEntitlement() == .plus)
         #expect(await service.membershipLimit() == 10)
+        #expect(await service.plusProductOffers().isEmpty)
     }
 }

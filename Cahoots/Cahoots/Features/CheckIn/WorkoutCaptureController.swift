@@ -1,9 +1,10 @@
 import AVFoundation
 import Foundation
+import OSLog
 import UIKit
 
 protocol WorkoutCapturing: AnyObject {
-    var previewLayer: AVCaptureVideoPreviewLayer? { get }
+    var captureSession: AVCaptureSession? { get }
     var isUsingStub: Bool { get }
     var isRecording: Bool { get }
     var currentPosition: AVCaptureDevice.Position { get }
@@ -32,7 +33,7 @@ enum WorkoutCaptureError: LocalizedError {
 
 @MainActor
 final class StubWorkoutCaptureController: WorkoutCapturing {
-    var previewLayer: AVCaptureVideoPreviewLayer? { nil }
+    var captureSession: AVCaptureSession? { nil }
     var isUsingStub: Bool { true }
     private(set) var isRecording = false
     private(set) var currentPosition: AVCaptureDevice.Position = .front
@@ -76,11 +77,11 @@ final class StubWorkoutCaptureController: WorkoutCapturing {
 }
 
 /// Owns the AVCaptureSession on a dedicated serial queue so configuration and
-/// `startRunning` never block the main actor. Stabilization is applied only
-/// when recording begins so the first preview frame appears quickly.
+/// `startRunning` never block the main actor. Preview setup is video-only.
+/// Microphone and stabilization are added when recording starts.
 @MainActor
 final class WorkoutCaptureController: NSObject, WorkoutCapturing, AVCaptureFileOutputRecordingDelegate {
-    var previewLayer: AVCaptureVideoPreviewLayer?
+    var captureSession: AVCaptureSession? { graph.session }
     var isUsingStub: Bool { false }
     private(set) var isRecording = false
     private(set) var currentPosition: AVCaptureDevice.Position = .front
@@ -90,7 +91,6 @@ final class WorkoutCaptureController: NSObject, WorkoutCapturing, AVCaptureFileO
     private let graph = CaptureGraph()
     private var continuation: CheckedContinuation<TimeInterval, Error>?
     private var recordingStartedAt: Date?
-    private var maxDurationTimer: Timer?
 
     static var shouldUseStub: Bool {
         if ProcessInfo.processInfo.arguments.contains("-stubWorkoutCapture") { return true }
@@ -117,17 +117,19 @@ final class WorkoutCaptureController: NSObject, WorkoutCapturing, AVCaptureFileO
             _ = await AVCaptureDevice.requestAccess(for: .audio)
         }
         guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else {
+            AppLog.capture.error("Capture prepare denied. videoAuth=\(AVCaptureDevice.authorizationStatus(for: .video).rawValue, privacy: .public)")
             throw WorkoutCaptureError.permissionDenied
         }
 
         let position = currentPosition
-        let audioAuthorized = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        AppLog.capture.info("Capture session configuring. position=\(position == .front ? "front" : "back", privacy: .public) videoOnly=true")
         let graph = self.graph
+        let started = ProcessInfo.processInfo.systemUptime
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             sessionQueue.async {
                 do {
-                    try graph.prepare(position: position, audioAuthorized: audioAuthorized)
+                    try graph.prepareForPreview(position: position)
                     continuation.resume()
                 } catch {
                     continuation.resume(throwing: error)
@@ -135,9 +137,8 @@ final class WorkoutCaptureController: NSObject, WorkoutCapturing, AVCaptureFileO
             }
         }
 
-        let layer = AVCaptureVideoPreviewLayer(session: graph.session)
-        layer.videoGravity = .resizeAspectFill
-        previewLayer = layer
+        let elapsed = Int(((ProcessInfo.processInfo.systemUptime - started) * 1000).rounded())
+        AppLog.capture.info("Capture session ready. running=\(graph.session.isRunning, privacy: .public) configureMs=\(elapsed, privacy: .public)")
     }
 
     func flipCamera() async throws {
@@ -164,29 +165,24 @@ final class WorkoutCaptureController: NSObject, WorkoutCapturing, AVCaptureFileO
             try? FileManager.default.removeItem(at: url)
         }
 
+        let audioAuthorized = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
         let graph = self.graph
+        let started = ProcessInfo.processInfo.systemUptime
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             sessionQueue.async {
-                graph.applyRecordingStabilization()
+                graph.enableRecordingExtras(audioAuthorized: audioAuthorized)
                 continuation.resume()
             }
         }
+        AppLog.capture.info("Recording extras ready. audio=\(audioAuthorized, privacy: .public) ms=\(Int(((ProcessInfo.processInfo.systemUptime - started) * 1000).rounded()), privacy: .public)")
 
         isRecording = true
         recordingStartedAt = .now
         graph.movieOutput.startRecording(to: url, recordingDelegate: self)
-        maxDurationTimer?.invalidate()
-        maxDurationTimer = Timer.scheduledTimer(withTimeInterval: WorkoutClipRules.maximumDuration, repeats: false) { [weak self] _ in
-            Task { @MainActor in
-                _ = try? await self?.stopRecording()
-            }
-        }
     }
 
     func stopRecording() async throws -> TimeInterval {
         guard isRecording else { throw WorkoutCaptureError.notRecording }
-        maxDurationTimer?.invalidate()
-        maxDurationTimer = nil
         return try await withCheckedThrowingContinuation { continuation in
             self.continuation = continuation
             graph.movieOutput.stopRecording()
@@ -194,9 +190,6 @@ final class WorkoutCaptureController: NSObject, WorkoutCapturing, AVCaptureFileO
     }
 
     func tearDown() {
-        maxDurationTimer?.invalidate()
-        maxDurationTimer = nil
-        previewLayer = nil
         isRecording = false
         let graph = self.graph
         sessionQueue.async {
@@ -230,8 +223,7 @@ private final class CaptureGraph: @unchecked Sendable {
     let movieOutput = AVCaptureMovieFileOutput()
     private var isConfigured = false
 
-    func prepare(position: AVCaptureDevice.Position, audioAuthorized: Bool) throws {
-        try configureAudioSession()
+    func prepareForPreview(position: AVCaptureDevice.Position) throws {
         session.automaticallyConfiguresApplicationAudioSession = false
 
         if !isConfigured || !session.isRunning {
@@ -248,19 +240,11 @@ private final class CaptureGraph: @unchecked Sendable {
             }
             session.addInput(videoInput)
 
-            if audioAuthorized,
-               let mic = AVCaptureDevice.default(for: .audio),
-               let audioInput = try? AVCaptureDeviceInput(device: mic),
-               session.canAddInput(audioInput) {
-                session.addInput(audioInput)
-            }
-
             guard session.canAddOutput(movieOutput) else {
                 session.commitConfiguration()
                 throw WorkoutCaptureError.unavailable
             }
             session.addOutput(movieOutput)
-            // Do not enable stabilization here — it delays the first preview frame.
             session.commitConfiguration()
             isConfigured = true
         }
@@ -268,6 +252,28 @@ private final class CaptureGraph: @unchecked Sendable {
         if !session.isRunning {
             session.startRunning()
         }
+    }
+
+    /// Mic and stabilization are applied only once recording begins so preview startup stays light.
+    func enableRecordingExtras(audioAuthorized: Bool) {
+        session.beginConfiguration()
+        if audioAuthorized,
+           !session.inputs.contains(where: { ($0 as? AVCaptureDeviceInput)?.device.hasMediaType(.audio) == true }) {
+            do {
+                try configureAudioSession()
+                if let mic = AVCaptureDevice.default(for: .audio),
+                   let audioInput = try? AVCaptureDeviceInput(device: mic),
+                   session.canAddInput(audioInput) {
+                    session.addInput(audioInput)
+                }
+            } catch {
+                AppLog.capture.error("Recording will continue without audio. \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        if let connection = movieOutput.connection(with: .video), connection.isVideoStabilizationSupported {
+            connection.preferredVideoStabilizationMode = .standard
+        }
+        session.commitConfiguration()
     }
 
     func flip(to position: AVCaptureDevice.Position) throws {
@@ -283,12 +289,6 @@ private final class CaptureGraph: @unchecked Sendable {
         }
         session.addInput(input)
         session.commitConfiguration()
-    }
-
-    func applyRecordingStabilization() {
-        if let connection = movieOutput.connection(with: .video), connection.isVideoStabilizationSupported {
-            connection.preferredVideoStabilizationMode = .standard
-        }
     }
 
     func tearDown() {

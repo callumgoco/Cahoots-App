@@ -1,5 +1,7 @@
 import Foundation
 import OSLog
+import StoreKit
+import UIKit
 
 extension AppStore {
     var activeMembershipCount: Int {
@@ -38,14 +40,19 @@ extension AppStore {
                 cachedEntitlement = profile
             }
         }
-        await syncEntitlementToServerIfNeeded()
+        _ = await syncEntitlementToServerIfNeeded()
     }
 
     func purchasePlus(_ productID: PlusProductID) async -> String? {
         do {
             try await environment.entitlements.purchase(productID)
-            await refreshEntitlements()
-            await syncEntitlementToServerIfNeeded()
+            await refreshEntitlementsFromStoreOnly()
+            if let syncError = await syncEntitlementToServerIfNeeded() {
+                return syncError
+            }
+            guard effectiveEntitlement.hasPlusAccess else {
+                return String(localized: "Purchase finished, but Plus isn’t active yet. Try Restore purchases.")
+            }
             noticeBanner = String(localized: "You’re on Cahoots Plus.")
             return nil
         } catch {
@@ -56,8 +63,10 @@ extension AppStore {
     func restorePlusPurchases() async -> String? {
         do {
             try await environment.entitlements.restore()
-            await refreshEntitlements()
-            await syncEntitlementToServerIfNeeded()
+            await refreshEntitlementsFromStoreOnly()
+            if let syncError = await syncEntitlementToServerIfNeeded() {
+                return syncError
+            }
             if effectiveEntitlement.hasPlusAccess {
                 noticeBanner = String(localized: "Plus restored.")
                 return nil
@@ -65,6 +74,27 @@ extension AppStore {
             return String(localized: "No Plus subscription found for this Apple ID.")
         } catch {
             return error.localizedDescription
+        }
+    }
+
+    func loadPlusProductOffers() async -> [PlusProductOffer] {
+        await environment.entitlements.plusProductOffers()
+    }
+
+    @MainActor
+    func openManageSubscriptions() async {
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive })
+                ?? UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first
+        else {
+            errorBanner = String(localized: "Open Settings → Apple ID → Subscriptions to manage Plus.")
+            return
+        }
+        do {
+            try await StoreKit.AppStore.showManageSubscriptions(in: scene)
+        } catch {
+            errorBanner = error.localizedDescription
         }
     }
 
@@ -93,9 +123,15 @@ extension AppStore {
         }
     }
 
-    private func syncEntitlementToServerIfNeeded() async {
-        guard environment.repository.mode == .live else { return }
-        guard let jws = await environment.entitlements.latestSignedTransactionJWS() else { return }
+    private func refreshEntitlementsFromStoreOnly() async {
+        cachedEntitlement = await environment.entitlements.currentEntitlement()
+    }
+
+    /// Syncs the latest StoreKit JWS to the server. Returns a user-visible error when live sync fails.
+    @discardableResult
+    private func syncEntitlementToServerIfNeeded() async -> String? {
+        guard environment.repository.mode == .live else { return nil }
+        guard let jws = await environment.entitlements.latestSignedTransactionJWS() else { return nil }
         do {
             let entitlement = try await environment.repository.syncEntitlement(signedTransaction: jws)
             cachedEntitlement = entitlement
@@ -107,8 +143,14 @@ extension AppStore {
                 }
                 self.snapshot = snapshot
             }
+            return nil
         } catch {
             AppLog.lifecycle.error("Entitlement sync failed: \(error.localizedDescription, privacy: .public)")
+            let message = String(
+                localized: "Purchase succeeded, but we couldn’t unlock Plus on your account. Check your connection and tap Restore purchases."
+            )
+            errorBanner = message
+            return message
         }
     }
 }

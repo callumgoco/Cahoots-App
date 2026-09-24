@@ -236,3 +236,12 @@ enum NotificationPlanBuilder {
         return shifted < deadline ? shifted : nil
     }
 }
+
+/// Chooses the on-device notification plan. Live mode leaves the centre empty because
+/// time-based reminders are delivered by server push (`private.enqueue_due_reminders`).
+enum NotificationDelivery {
+    static func localPlan(mode: AppMode, snapshot: DemoSnapshot, now: Date) -> [NotificationPlanItem] {
+        guard mode != .live else { return [] }
+        return NotificationPlanBuilder.build(snapshot: snapshot, now: now)
+    }
+}

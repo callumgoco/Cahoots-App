@@ -6,36 +6,32 @@ struct WorkoutSessionChooseView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Spacer()
+            VStack(alignment: .leading, spacing: AppSpacing.large) {
+                if let challenge = store.currentChallenge {
+                    requirementsCard(challenge)
+                }
+
+                if !store.todayMemberStatuses.isEmpty {
+                    CrewTodayStatusRail(
+                        entries: store.todayMemberStatuses,
+                        accessibilityID: "workoutSession.crewStatus"
+                    )
+                }
+
+                if let personalRankLine {
+                    Text(personalRankLine)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AppColors.secondaryInk)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier("workoutSession.personalRank")
+                }
+            }
+            .padding(.horizontal, AppSpacing.page)
+            .padding(.top, AppSpacing.medium)
+
+            Spacer(minLength: AppSpacing.large)
 
             VStack(spacing: AppSpacing.medium) {
-                if let challenge = store.currentChallenge {
-                    VStack(spacing: AppSpacing.small) {
-                        Text(challenge.activityType)
-                            .font(.title2.bold())
-                        Text("Target · \(challenge.quantityLabel)")
-                            .foregroundStyle(AppColors.secondaryInk)
-                        Text(chooseCopy(for: challenge))
-                            .font(.subheadline)
-                            .multilineTextAlignment(.center)
-                            .foregroundStyle(AppColors.secondaryInk)
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel(
-                        String(
-                            localized: "\(challenge.activityType). Target \(challenge.quantityLabel)"
-                        )
-                    )
-                }
-
-                if !store.todayPeerCheckIns.isEmpty {
-                    WorkoutSessionCrewStrip(
-                        store: store,
-                        challenge: store.currentChallenge,
-                        spoilered: !store.canRevealTodayQuantities
-                    )
-                }
-
                 if let formError = controller.formError {
                     Label(formError, systemImage: "exclamationmark.circle.fill")
                         .foregroundStyle(AppColors.danger)
@@ -65,13 +61,55 @@ struct WorkoutSessionChooseView: View {
         .roundPage()
     }
 
+    private func requirementsCard(_ challenge: CahootsChallenge) -> some View {
+        CahootsCard(elevated: true) {
+            VStack(alignment: .leading, spacing: AppSpacing.small) {
+                Text("Today’s target")
+                    .font(AppTypography.label)
+                    .foregroundStyle(AppColors.secondaryInk)
+                Text(challenge.quantityLabel)
+                    .font(AppTypography.heroMetric)
+                Text(challenge.activityType)
+                    .font(.title3.bold())
+                Text(chooseCopy(for: challenge))
+                    .font(.subheadline)
+                    .foregroundStyle(AppColors.secondaryInk)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
     private func chooseCopy(for challenge: CahootsChallenge) -> String {
         if controller.hasPendingStartClip {
-            return String(localized: "Film a finish clip for the crew, or skip and enter today’s amount only.")
+            return String(localized: "Film a finish clip for the crew.")
         }
         if challenge.measurementType.requiresTwoClips {
-            return String(localized: "Film short clips for the crew, or skip and enter today’s amount only. This round is honour system.")
+            return String(localized: "A short clip now, and one when you finish.")
         }
-        return String(localized: "Film a short clip for the crew, or skip and enter today’s amount only. This round is honour system.")
+        return String(localized: "A short clip for the crew.")
+    }
+
+    /// Own standing only. Peer points on this board already hide today’s score until reveal.
+    private var personalRankLine: String? {
+        guard let userID = store.currentUser?.id,
+              let rank = store.currentRank,
+              let entry = store.currentLeaderboard.first(where: { $0.user.id == userID }) else {
+            return nil
+        }
+        return String(localized: "You’re \(Self.ordinal(rank)) · \(entry.points) pts")
+    }
+
+    private static func ordinal(_ rank: Int) -> String {
+        let teen = rank % 100
+        if (11...13).contains(teen) {
+            return String(localized: "\(rank)th")
+        }
+        switch rank % 10 {
+        case 1: return String(localized: "\(rank)st")
+        case 2: return String(localized: "\(rank)nd")
+        case 3: return String(localized: "\(rank)rd")
+        default: return String(localized: "\(rank)th")
+        }
     }
 }

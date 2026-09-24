@@ -71,6 +71,7 @@ struct ProposalVoteLoopTests {
         var draft = ProposalDraft()
         draft.title = "Wave One Round"
         draft.startDate = store.earliestProposalStartDate
+        draft.deadlineMinutes = 23 * 60 + 59
 
         let ok = await store.createProposal(from: draft)
         #expect(ok)

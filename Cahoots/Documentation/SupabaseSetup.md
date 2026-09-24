@@ -20,7 +20,7 @@ Live project URL: `https://wfxmguwfowvtkngqiqfr.supabase.co`
    - `clip-download-url`
    - `delete-account`
    - `purge-workout-clips` (`verify_jwt` false)
-   - `dispatch-pushes` (`verify_jwt` false; friend-posted outbox + digests)
+   - `dispatch-pushes` (`verify_jwt` false; friend-posted outbox + digests + crew updates + server reminders)
    - `sync-entitlement` (Cahoots Plus purchase sync)
    - `storekit-notifications` (`verify_jwt` false; App Store Server Notifications V2)
 5. Private Storage bucket `workout-proofs` is created by the completion migration. Object path: `{group_id}/{challenge_id}/{requirement_date}/{user_id}/{clip_id}.mov`.
@@ -33,7 +33,9 @@ The schema creates all MVP tables, indexes, eligible-voter snapshots, score ledg
 
 The welcome screen leads with **Create account** in live mode, then Sign in with Apple, then **Sign in**. Sign-up and sign-in open dedicated email forms; sign-up sends `display_name` and `timezone` in user metadata; `handle_new_user` creates the `profiles` row automatically.
 
-**Dashboard step required for local testing:** Authentication → Providers → Email → disable **Confirm email**, otherwise new accounts cannot sign in until confirmed.
+**Dashboard for production:** Authentication → Providers → Email → enable **Confirm email**, and set the Site URL / redirect allow-list to include `https://cahoots-app.netlify.app/confirm/`. The app shows “Confirm your email before signing in.” until the link is opened.
+
+**Dashboard for local testing only:** disable Confirm email, or confirm accounts manually before the first sign-in.
 
 ### Apple Sign in
 
@@ -69,12 +71,15 @@ Group-scoped tables are in the Realtime publication: `challenge_proposals`, `vot
 - `finalize-expired-votes` every 5 minutes
 - `activate-due-challenges` / `complete-due-challenges` every 15 minutes
 - `purge-expired-workout-clips` daily at 03:00 UTC (clips past deadline + 48h or on ended rounds; orphan `workout-proofs` objects older than 24h; newer check-ins also drop that member’s older-day clips)
-- `dispatch-pushes` every minute (no-ops until Vault `cron_secret` is set)
+- `dispatch-pushes` every minute (no-ops until Vault `cron_secret` is set); also kicked immediately after crew-update and due-reminder enqueue
+- `enqueue-due-reminders` every five minutes (`private.enqueue_due_reminders`)
 
 ## Production checklist
 
 - Replace the placeholder support contact and invite-link domain in `Configuration.xcconfig`.
-- Disable email confirmation only for development; use real confirmation (or Apple) in production.
+- Enable email confirmation for production; set Auth redirect to `https://cahoots-app.netlify.app/confirm/`.
+- Enable leaked-password protection (HaveIBeenPwned) in Auth.
+- Set Edge secret `APPLE_BUNDLE_ID=com.callumoconnor.cahoots`.
 - Exercise RLS as two unrelated users and removed/blocked users.
 - Configure rate limits, log redaction, backups, PITR, and alerting.
 - Rotate keys and document incident response.

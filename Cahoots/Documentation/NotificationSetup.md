@@ -1,6 +1,14 @@
 # Notification setup
 
-## Local planning
+## Delivery model
+
+**Live mode** delivers every lock-screen alert as a remote push (APNs). The iOS notification centre is kept empty so the same reminder is not scheduled twice. Time-based reminders are produced by `private.enqueue_due_reminders` (every five minutes) into `push_outbox`, then sent by `dispatch-pushes`. Event-driven crew updates enqueue immediately and kick `private.invoke_dispatch_pushes()` in the same transaction so delivery does not wait for the minute cron.
+
+**Demo mode** still uses on-device `NotificationPlanBuilder` for the next seven days.
+
+Cold-start taps are buffered on `CahootsAppDelegate` until `AppStore` is attached at launch, then flushed into `AppStore.handleNotificationUserInfo`.
+
+## Local planning (demo)
 
 `NotificationPlanBuilder` produces one-shot requests for the next seven days across every active group. It considers challenge timezone, selected weekdays, completion/recovery state, open votes, global quiet hours, the default reminder time, and per-group reminder/update settings.
 
@@ -18,14 +26,26 @@ Identifiers contain the notification type, group, challenge/proposal, and requir
 
 Quiet-hour adjustments move a request to quiet-hours end only when it will still fire before its relevant deadline; otherwise the request is omitted. Lock-screen text intentionally contains no workout quantities, points, or media thumbnails.
 
+## Server reminders (live)
+
+`private.enqueue_due_reminders` mirrors the local kinds for members who still have tokens registered:
+
+| Kind | Gate | When |
+|---|---|---|
+| Daily / evening / deadline | `personal_reminders_enabled` | Reminder time, deadline − 2h, deadline − 30m |
+| Vote closing | `challenge_updates_enabled` | Inside the last 4h of an open vote (≥ 10 minutes remaining), eligible voters who have not voted |
+| Round starting | `challenge_updates_enabled` | Morning of a scheduled round’s start day |
+
+Idempotency uses `push_reminder_sends` (unique on user, kind, subject, requirement day). Quiet hours defer `send_after` in the member’s profile timezone the same way crew updates do.
+
 ## Votes & round updates (remote)
 
-When a steward opens a vote, starts a round, a proposal passes, or a scheduled round activates, `private.enqueue_crew_update_pushes` inserts `push_outbox` rows for other members (or all members when there is no actor) who have **Votes & round updates** (`challenge_updates_enabled`) on. Quiet hours defer `send_after` until quiet-hours end in the member’s profile timezone. `dispatch-pushes` delivers them on the next cron tick.
+When a steward opens a vote, starts a round, a proposal passes, a proposal fails, or a scheduled round activates, `private.enqueue_crew_update_pushes` inserts `push_outbox` rows for other members (or all members when there is no actor) who have **Votes & round updates** (`challenge_updates_enabled`) on. Quiet hours defer `send_after` until quiet-hours end in the member’s profile timezone. After a successful enqueue, dispatch is invoked immediately; the minute cron remains the retry path.
 
 Deep links:
 
 - Vote opened → `cahoots://vote/{groupID}/{proposalID}`
-- Round scheduled / started / proposal passed → `cahoots://log/{groupID}`
+- Round scheduled / started / proposal passed or failed → `cahoots://log/{groupID}`
 
 These are separate from friend-posted check-in alerts (`friendActivityMode`).
 
@@ -41,11 +61,11 @@ When a member submits a proof check-in, `submit-workout` fans out to peers. New 
 
 Quiet hours for immediate mode defer into the digest queue. Completers see “Jordan just posted.” Incomplete members see “Jordan posted — log yours to see it.” Digests summarize counts without quantities. Deep links use `cahoots://log/{groupID}` and are handled on tap by `CahootsAppDelegate` → `AppStore.handleNotificationUserInfo`.
 
-Local reminders embed the same `deepLink` (plus `kind` / `groupID` / optional `proposalID`) in `UNNotificationContent.userInfo`. Vote reminders use `cahoots://vote/{groupID}/{proposalID}` and open Crew → Voting. Round-starting reminders use `cahoots://log/{groupID}` and open Today check-in routing.
+Demo local reminders embed the same `deepLink` (plus `kind` / `groupID` / optional `proposalID`) in `UNNotificationContent.userInfo`. Live remote payloads carry `deepLink` the same way.
 
-`dispatch-pushes` runs every minute via `pg_cron` → `private.invoke_dispatch_pushes()` → Edge Function (requires Vault secret `cron_secret` matching Edge `CRON_SECRET`). Invalid APNs tokens (`410` / `BadDeviceToken` / `Unregistered`) are deleted from `device_push_tokens`.
+`dispatch-pushes` runs every minute via `pg_cron` → `private.invoke_dispatch_pushes()` → Edge Function (requires Vault secret `cron_secret` matching Edge `CRON_SECRET`). Crew-update enqueue and due-reminder enqueue also call `invoke_dispatch_pushes` immediately when they insert ready rows. Invalid APNs tokens (`410` / `BadDeviceToken` / `Unregistered` / `DeviceTokenNotForTopic`) are deleted from `device_push_tokens`.
 
-Vault `cron_secret` and Edge `CRON_SECRET` / `APNS_*` are configured on the live project by the operator.
+Vault `cron_secret` and Edge `CRON_SECRET` / `APNS_*` are configured on the live project by the operator. Confirm `APNS_BUNDLE_ID` is `com.callumoconnor.cahoots` (must match the App ID topic). Debug builds register `sandbox` tokens; Release / TestFlight register `production`.
 
 ### Edge secrets (never in the iOS app)
 
@@ -77,7 +97,7 @@ Never embed APNs private keys in the app.
 
 ## Permission lifecycle
 
-The explanation sheet is offered only when the user has a scheduled or active challenge and authorization is undetermined. Dismissal is persisted. If authorization is denied, Cahoots keeps in-app deadline/vote status and offers a link to iOS Settings. Plans rebuild after launch, foregrounding, significant time/timezone changes, group switching, reconciliation, check-in, recovery, and settings changes.
+The explanation sheet is offered as soon as a signed-in account loads while authorization is still undetermined, including a brand-new account with no crew yet. Dismissal is persisted. If authorization is denied, Cahoots keeps in-app deadline/vote status and offers a link to iOS Settings. In live mode, rebuilds clear any leftover local requests and re-register the device token after launch, foregrounding, significant time/timezone changes, group switching, reconciliation, check-in, recovery, and settings changes.
 
 ## Target capabilities
 
@@ -85,4 +105,4 @@ The target contains Push Notifications, Background Modes, Sign in with Apple, an
 
 1. Enable those capabilities on the production App ID and provisioning profile.
 2. Confirm the generated entitlements resolve `aps-environment` to `production` for Release (`development` is retained for Debug).
-3. Test authorization, quiet hours, timezone changes, background execution, and a live friend-posted push on a physical device.
+3. Device-certify on a physical iPhone: authorization, quiet hours, timezone changes, a live friend-posted push, a vote-open tap from a killed app, a failed-proposal push, and a personal reminder after force-quit.

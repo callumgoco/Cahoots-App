@@ -53,22 +53,31 @@ struct EmptyAccountView: View {
             .roundPage()
             .sheet(isPresented: $showCreate) { CreateGroupView() }
             .sheet(isPresented: $showJoin) { JoinGroupView() }
-            .alert("Sign out of Cahoots?", isPresented: $showSignOut) {
-                Button("Sign out", role: .destructive) { Task { await store.signOutAsync() } }
-                Button("Cancel", role: .cancel) {}
+            .sheet(isPresented: $showSignOut) {
+                CahootsConfirmationSheet(
+                    title: "Sign out of Cahoots?",
+                    message: "You’ll need to sign in again to get back to your crews.",
+                    confirmTitle: "Sign out",
+                    onConfirm: { showSignOut = false; Task { await store.signOutAsync() } },
+                    onCancel: { showSignOut = false }
+                )
             }
-            .alert("Delete your account?", isPresented: $showDelete) {
-                Button("Delete account", role: .destructive) {
-                    Task {
-                        isDeleting = true
-                        await store.deleteAccount()
-                        isDeleting = false
-                    }
-                }
-                .disabled(isDeleting)
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This starts permanent deletion of your profile and private group data. This cannot be undone.")
+            .sheet(isPresented: $showDelete) {
+                CahootsConfirmationSheet(
+                    title: "Delete your account?",
+                    message: "This starts permanent deletion of your profile and private group data. This cannot be undone.",
+                    confirmTitle: "Delete account",
+                    isWorking: isDeleting,
+                    onConfirm: {
+                        Task {
+                            isDeleting = true
+                            await store.deleteAccount()
+                            isDeleting = false
+                            showDelete = false
+                        }
+                    },
+                    onCancel: { showDelete = false }
+                )
             }
         }
     }

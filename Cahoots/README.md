@@ -61,6 +61,7 @@ Before TestFlight / App Store:
 5. Enable leaked-password protection in Supabase Auth.
 6. Device-certify Sign in with Apple, Keychain, camera/clips, push, universal links, background sync.
 7. Confirm App Privacy answers match `PrivacyInfo.xcprivacy`.
+8. Set Edge secret `APPLE_BUNDLE_ID=com.callumoconnor.cahoots`; configure ASC Plus products, intro offer, and ASN V2.
 
 See [Known limitations](Documentation/KnownLimitations.md) and [Notification setup](Documentation/NotificationSetup.md).
 

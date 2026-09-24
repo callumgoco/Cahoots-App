@@ -11,6 +11,7 @@ struct ChallengeBuilderView: View {
     @State private var isSubmitting = false
     @State private var showCloseConfirmation = false
     @State private var didLoad = false
+    @FocusState private var focusedTargetField: TargetField?
     private let initialDraft: ProposalDraft?
     private let draftStore = ProposalDraftStore()
     private let stepTitles = ["Workout", "Target", "When", "Review"]
@@ -69,15 +70,17 @@ struct ChallengeBuilderView: View {
                         .buttonStyle(PrimaryButtonStyle())
                         .disabled(!isStepValid || isSubmitting)
                         .accessibilityIdentifier("builder.startNow")
-                        Text(VotingWindowCopy.startNowCaption(
-                            startDate: draft.startDate,
-                            timeZoneIdentifier: draft.timezone
-                        ))
+                        Text(firstCheckInAlreadyClosed
+                             ? ScheduleEngine.firstCheckInClosedMessage
+                             : VotingWindowCopy.startNowCaption(
+                                startDate: draft.startDate,
+                                timeZoneIdentifier: draft.timezone
+                             ))
                         .font(.footnote)
-                        .foregroundStyle(AppColors.secondaryInk)
+                        .foregroundStyle(firstCheckInAlreadyClosed ? AppColors.danger : AppColors.secondaryInk)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
-                        .accessibilityIdentifier("builder.startNowCaption")
+                        .accessibilityIdentifier(firstCheckInAlreadyClosed ? "builder.deadlinePassed" : "builder.startNowCaption")
                         Button {
                             Task { await putToVote() }
                         } label: {
@@ -187,17 +190,63 @@ struct ChallengeBuilderView: View {
                 CahootsCard {
                     VStack(alignment: .leading, spacing: AppSpacing.medium) {
                         Text("Daily target").font(.headline)
-                        TextField("Target", value: $draft.minimumQuantity, format: .number.precision(.fractionLength(0...1)))
-                            .font(AppTypography.resultMetric)
-                            .keyboardType(draft.measurementType == .distance ? .decimalPad : .numberPad)
-                            .accessibilityIdentifier("builder.target")
+                        HStack(alignment: .firstTextBaseline, spacing: AppSpacing.small) {
+                            TextField("Target", value: $draft.minimumQuantity, format: .number.precision(.fractionLength(0...1)))
+                                .font(AppTypography.resultMetric)
+                                .keyboardType(draft.measurementType == .distance ? .decimalPad : .numberPad)
+                                .focused($focusedTargetField, equals: .quantity)
+                                .accessibilityIdentifier("builder.target")
+                            Image(systemName: "pencil")
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(AppColors.secondaryInk)
+                                .accessibilityHidden(true)
+                        }
+                        .padding(.horizontal, AppSpacing.medium)
+                        .padding(.vertical, AppSpacing.small)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(AppColors.raised, in: RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous)
+                                .strokeBorder(
+                                    AppColors.ink.opacity(focusedTargetField == .quantity ? 0.45 : 0.16),
+                                    lineWidth: focusedTargetField == .quantity ? 1.5 : 1
+                                )
+                        )
                         Text(draft.measurementType.displayName).foregroundStyle(AppColors.secondaryInk)
                         AdaptiveStack(spacing: AppSpacing.small) {
                             ForEach(suggestedTargets, id: \.self) { target in
-                                Button(target.formatted()) { draft.minimumQuantity = target }.buttonStyle(.bordered)
+                                let isSelected = draft.minimumQuantity == target
+                                Button(target.formatted()) { draft.minimumQuantity = target }
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(isSelected ? AppColors.onInk : AppColors.ink)
+                                    .padding(.horizontal, AppSpacing.medium)
+                                    .frame(minHeight: 36)
+                                    .background(
+                                        isSelected ? AppColors.ink : AppColors.raised,
+                                        in: Capsule()
+                                    )
+                                    .overlay(
+                                        Capsule()
+                                            .strokeBorder(AppColors.ink.opacity(isSelected ? 0 : 0.2), lineWidth: 1)
+                                    )
                             }
                         }
-                        TextField("Challenge title", text: $draft.title).textInputAutocapitalization(.words)
+                    }
+                }
+                CahootsField(title: "Challenge title", isFocused: focusedTargetField == .title) {
+                    HStack(spacing: AppSpacing.small) {
+                        TextField(
+                            "",
+                            text: $draft.title,
+                            prompt: Text("Name this round").foregroundStyle(AppColors.secondaryInk)
+                        )
+                        .textInputAutocapitalization(.words)
+                        .focused($focusedTargetField, equals: .title)
+                        .accessibilityIdentifier("builder.title")
+                        Image(systemName: "pencil")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(AppColors.secondaryInk)
+                            .accessibilityHidden(true)
                     }
                 }
             }
@@ -230,6 +279,12 @@ struct ChallengeBuilderView: View {
                         Text("Length").font(.headline)
                         Stepper("\(draft.durationDays) days", value: $draft.durationDays, in: 7...90)
                         DatePicker("Starts", selection: $draft.startDate, in: store.earliestProposalStartDate..., displayedComponents: .date)
+                        if firstCheckInAlreadyClosed {
+                            Text(ScheduleEngine.firstCheckInClosedMessage)
+                                .font(.footnote)
+                                .foregroundStyle(AppColors.danger)
+                                .accessibilityIdentifier("builder.deadlinePassed")
+                        }
                     }
                 }
                 CahootsCard {
@@ -306,9 +361,21 @@ struct ChallengeBuilderView: View {
                 && (0..<1_440).contains(draft.deadlineMinutes)
                 && TimeZone(identifier: draft.timezone) != nil
                 && (0...4).contains(draft.recoveryDays)
+                && !firstCheckInAlreadyClosed
         default:
-            true
+            !firstCheckInAlreadyClosed
         }
+    }
+
+    private var firstCheckInAlreadyClosed: Bool {
+        ScheduleEngine.firstCheckInAlreadyClosed(
+            startDate: draft.startDate,
+            deadlineMinutes: draft.deadlineMinutes,
+            timeZoneIdentifier: draft.timezone,
+            frequencyType: draft.frequencyType,
+            scheduledWeekdays: draft.scheduledWeekdays,
+            now: store.environment.clock.now
+        )
     }
 
     private var targetStepHeadline: String {
@@ -408,5 +475,10 @@ struct ChallengeBuilderView: View {
         isSubmitting = true
         defer { isSubmitting = false }
         if await store.createProposal(from: draft) { clearDraft(); dismiss() }
+    }
+
+    private enum TargetField: Hashable {
+        case quantity
+        case title
     }
 }

@@ -2,13 +2,15 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, json } from "../_shared/cors.ts";
 import {
   applyEntitlementByOriginalTransaction,
-  decodeJWSPayload,
   entitlementFromTransaction,
+  requireAppleBundleID,
+  verifyAndDecodeAppleJWS,
 } from "../_shared/entitlements.ts";
 
 /**
  * App Store Server Notifications V2 endpoint.
  * Configure ASC → Server Notifications URL to this function.
+ * Verifies Apple's JWS signature chain before mutating entitlements.
  */
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -19,16 +21,17 @@ Deno.serve(async (request) => {
     const signedPayload = String(body.signedPayload ?? "");
     if (!signedPayload) return json({ message: "signedPayload is required" }, 422);
 
-    const payload = decodeJWSPayload(signedPayload);
+    const payload = await verifyAndDecodeAppleJWS(signedPayload);
     const data = (payload.data ?? {}) as Record<string, unknown>;
     const signedTransactionInfo = String(data.signedTransactionInfo ?? "");
     if (!signedTransactionInfo) return json({ message: "missing transaction" }, 422);
 
-    const tx = decodeJWSPayload(signedTransactionInfo);
+    const bundleID = requireAppleBundleID();
+    const tx = await verifyAndDecodeAppleJWS(signedTransactionInfo);
     const notificationType = String(payload.notificationType ?? "");
     const subtype = String(payload.subtype ?? "");
 
-    let fields = entitlementFromTransaction(tx, Deno.env.get("APPLE_BUNDLE_ID") ?? undefined);
+    let fields = entitlementFromTransaction(tx, bundleID);
 
     // Explicit revoke / expire / refund always clears Plus even if expiry parsing is soft.
     if (

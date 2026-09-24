@@ -56,9 +56,9 @@ Both are deployed on project `wfxmguwfowvtkngqiqfr`. ASN URL:
 1. App Store Connect: Paid Apps agreement, Plus subscription group, both products, annual intro offer.
 2. Xcode / Apple Developer: In-App Purchase on App ID `com.callumoconnor.cahoots`.
 3. ~~Deploy entitlement migration~~ (applied as `cahoots_plus_entitlements`).
-4. ~~Deploy `sync-entitlement` and `storekit-notifications`~~. Still set Edge Function secret:
+4. ~~Deploy `sync-entitlement` and `storekit-notifications` with Apple JWS signature verification~~ (x5c chain to Apple Root CA - G3). **Required** Edge Function secret:
    - `APPLE_BUNDLE_ID=com.callumoconnor.cahoots` (Dashboard → Project Settings → Edge Functions → Secrets, or `supabase secrets set`)
-   - Optional later: App Store Server API key material for stricter ASN verification
 5. Point ASC Server Notifications V2 (Production + Sandbox) at the ASN URL above.
 6. Sandbox purchase on a physical device with scheme StoreKit Configuration = **None**; confirm profile entitlement flips and a second join succeeds.
 7. Confirm UITests still pass with `-entitlement plus` (or demo mode).
+8. Redeploy Netlify `web/` so hosted `/terms/` includes the Plus subscription section and `/confirm/` is available for Auth email redirects.

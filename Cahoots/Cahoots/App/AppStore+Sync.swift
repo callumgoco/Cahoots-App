@@ -270,10 +270,11 @@ extension AppStore {
         }
         let settings = snapshot.notificationSettings ?? UserNotificationSettings.defaults(userID: snapshot.currentUser.id, groups: activeGroups)
         let suppressPrimer = ProcessInfo.processInfo.arguments.contains("-suppressNotificationPrimer")
+        // Ask on first sign-in, before the account has a crew or a challenge.
+        // iOS only shows the system dialog while status is still notDetermined.
         let shouldOfferPrimer = status == .notDetermined
             && !suppressPrimer
             && !settings.primerDismissed
-            && snapshot.challenges.contains(where: { activeGroups.map(\.id).contains($0.groupID) && ($0.status == .active || $0.status == .scheduled) })
         if shouldOfferPrimer {
             scheduleNotificationPrimer()
         } else {
@@ -284,8 +285,15 @@ extension AppStore {
             await environment.notifications.replacePlan([])
             return
         }
-        await environment.notifications.replacePlan(NotificationPlanBuilder.build(snapshot: snapshot, now: environment.clock.now))
-        AppLog.notifications.info("Rebuilt local notification plan")
+        // Live mode delivers time-based reminders via server push; keep the local centre clear
+        // so the same nudge is not scheduled twice.
+        let plan = NotificationDelivery.localPlan(mode: mode, snapshot: snapshot, now: environment.clock.now)
+        await environment.notifications.replacePlan(plan)
+        if mode == .live {
+            AppLog.notifications.info("Cleared local notification plan for live mode")
+        } else {
+            AppLog.notifications.info("Rebuilt local notification plan")
+        }
         await registerForRemoteNotificationsIfNeeded()
     }
 

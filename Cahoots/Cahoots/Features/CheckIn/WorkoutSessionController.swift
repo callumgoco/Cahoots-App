@@ -1,11 +1,17 @@
+import AVFoundation
 import Foundation
 import Observation
+import OSLog
 
 @MainActor
 @Observable
 final class WorkoutSessionController {
     var phase: WorkoutSessionPhase = .choose
     var capture: (any WorkoutCapturing)?
+    /// Published when preview warmup finishes so the camera view can attach before Record.
+    var captureSession: AVCaptureSession?
+    var cameraPosition: AVCaptureDevice.Position = .front
+    var usesStubCapture = false
     var isCaptureReady = false
     var isActivelyRecording = false
     var recordedClips: [WorkoutClip] = []
@@ -68,6 +74,17 @@ final class WorkoutSessionController {
         }
     }
 
+    /// Keeps the preview in the hierarchy on the choose screen so the capture connection
+    /// is already live when Record is tapped.
+    var keepsCameraMounted: Bool {
+        switch phase {
+        case .choose, .prep, .countdown, .record:
+            captureSession != nil || usesStubCapture
+        default:
+            false
+        }
+    }
+
     func bootstrap(store: AppStore) {
         guard let challenge = store.currentChallenge else { return }
         amount = max(challenge.minimumQuantity, previousAmount(store: store, challenge: challenge) ?? 0)
@@ -110,6 +127,9 @@ final class WorkoutSessionController {
         }
         currentKind = store.currentChallenge?.measurementType.requiresTwoClips == true ? .start : .set
         phase = .prep
+        CaptureTiming.markRecordTapped()
+        AppLog.capture.info("Record tapped. Opening prep. kind=\(String(describing: self.currentKind), privacy: .public) captureReady=\(self.isCaptureReady, privacy: .public) preview=\(self.captureSession == nil ? "nil" : "set", privacy: .public)")
+        CaptureTiming.logSinceRecord("phase set to prep")
         Task { await prepareCapture() }
     }
 
@@ -123,25 +143,38 @@ final class WorkoutSessionController {
     }
 
     func tearDown() {
+        AppLog.capture.info("Capture tear down. phase=\(String(describing: self.phase), privacy: .public)")
         prepareTask?.cancel()
         prepareTask = nil
         recordingTimer?.invalidate()
         recordingTimer = nil
         isCaptureReady = false
         isActivelyRecording = false
+        captureSession = nil
+        usesStubCapture = false
         capture?.tearDown()
         capture = nil
     }
 
     /// Starts camera warm-up while the user is still on the choose screen.
     func beginCameraWarmUpIfNeeded() {
-        guard openedWhileWindowOpen, !isCaptureReady else { return }
+        guard openedWhileWindowOpen, !isCaptureReady else {
+            AppLog.capture.info("Camera warm-up skipped. windowOpen=\(self.openedWhileWindowOpen, privacy: .public) captureReady=\(self.isCaptureReady, privacy: .public)")
+            return
+        }
+        AppLog.capture.info("Camera warm-up started")
+        CaptureTiming.markWarmUp()
         Task { await prepareCapture() }
     }
 
     func prepareCapture() async {
-        if isCaptureReady, capture != nil { return }
+        if isCaptureReady, capture != nil {
+            AppLog.capture.info("Prepare skipped. Capture already ready.")
+            CaptureTiming.logSinceRecord("prepare skipped")
+            return
+        }
         if let inFlight = prepareTask {
+            AppLog.capture.info("Prepare joined in-flight warm-up")
             await inFlight.value
             if isCaptureReady, capture != nil { return }
         }
@@ -170,14 +203,25 @@ final class WorkoutSessionController {
             capture = controller
         }
 
+        AppLog.capture.info("Prepare running. stub=\(controller.isUsingStub, privacy: .public) phase=\(String(describing: self.phase), privacy: .public)")
         do {
             try await controller.prepare()
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else {
+                AppLog.capture.info("Prepare cancelled after session setup")
+                return
+            }
             captureError = nil
+            captureSession = controller.captureSession
+            cameraPosition = controller.currentPosition
+            usesStubCapture = controller.isUsingStub
             isCaptureReady = true
+            AppLog.capture.info("Prepare ready. preview=\(self.captureSession == nil ? "nil" : "set", privacy: .public) sessionID=\(PreviewDebug.id(self.captureSession), privacy: .public) sessionRunning=\(self.captureSession?.isRunning ?? false, privacy: .public) stub=\(self.usesStubCapture, privacy: .public) position=\(self.cameraPosition == .front ? "front" : "back", privacy: .public) phase=\(String(describing: self.phase), privacy: .public)")
+            CaptureTiming.logSinceWarmUp("prepare ready")
+            CaptureTiming.logSinceRecord("prepare ready")
         } catch WorkoutCaptureError.permissionDenied {
             guard !Task.isCancelled else { return }
             isCaptureReady = false
+            AppLog.capture.error("Prepare failed. Camera permission denied. phase=\(String(describing: self.phase), privacy: .public)")
             if phase == .prep || phase == .choose {
                 phase = .permissionDenied
             }
@@ -185,15 +229,21 @@ final class WorkoutSessionController {
             guard !Task.isCancelled else { return }
             isCaptureReady = false
             captureError = error.localizedDescription
+            AppLog.capture.error("Prepare failed. \(error.localizedDescription, privacy: .public)")
         }
     }
 
     func beginCountdown(reduceMotion: Bool) {
-        guard canStartCaptureActions else { return }
+        guard canStartCaptureActions else {
+            AppLog.capture.info("Start tapped but capture is not ready. windowOpen=\(self.openedWhileWindowOpen, privacy: .public) captureReady=\(self.isCaptureReady, privacy: .public) preview=\(self.captureSession == nil ? "nil" : "set", privacy: .public)")
+            return
+        }
         if reduceMotion {
+            AppLog.capture.info("Start tapped. Reduce Motion skips countdown.")
             beginAutoRecording()
             return
         }
+        AppLog.capture.info("Start tapped. Countdown beginning. preview=\(self.captureSession == nil ? "nil" : "set", privacy: .public)")
         phase = .countdown(3)
         Task {
             for next in stride(from: 3, through: 1, by: -1) {
@@ -211,21 +261,35 @@ final class WorkoutSessionController {
 
     /// Moves into the record phase and starts capture immediately (countdown finished or skipped).
     func beginAutoRecording() {
-        guard canStartCaptureActions, !isActivelyRecording else { return }
+        guard canStartCaptureActions, !isActivelyRecording else {
+            AppLog.capture.info("Auto-record skipped. captureReady=\(self.isCaptureReady, privacy: .public) alreadyRecording=\(self.isActivelyRecording, privacy: .public)")
+            return
+        }
+        AppLog.capture.info("Auto-record starting")
         formError = nil
         recordingElapsed = 0
+        isActivelyRecording = true
         phase = .record
         Task { await startRecording() }
     }
 
     func startRecording() async {
-        guard let capture, isCaptureReady, !isActivelyRecording else { return }
+        guard let capture, isCaptureReady else {
+            AppLog.capture.info("startRecording skipped. capture=\(self.capture == nil ? "nil" : "set", privacy: .public) captureReady=\(self.isCaptureReady, privacy: .public)")
+            return
+        }
+        guard !capture.isRecording else {
+            AppLog.capture.info("startRecording skipped. Capture is already recording.")
+            return
+        }
+        isActivelyRecording = true
         let filename = WorkoutClipStore.makeFilename(kind: currentKind)
         let url = WorkoutClipStore.fileURL(for: filename)
         do {
+            AppLog.capture.info("startRecording file=\(filename, privacy: .public)")
             try await capture.startRecording(to: url)
-            isActivelyRecording = true
             previewURL = url
+            AppLog.capture.info("Recording started")
             recordingElapsed = 0
             recordingTimer?.invalidate()
             recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
@@ -238,11 +302,13 @@ final class WorkoutSessionController {
                 }
             }
         } catch WorkoutCaptureError.alreadyRecording {
+            AppLog.capture.info("startRecording reported already recording")
             isActivelyRecording = true
         } catch {
             isActivelyRecording = false
             formError = error.localizedDescription
             phase = .prep
+            AppLog.capture.error("startRecording failed. \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -253,6 +319,7 @@ final class WorkoutSessionController {
         do {
             let duration = try await capture.stopRecording()
             isActivelyRecording = false
+            AppLog.capture.info("Recording stopped. duration=\(duration, privacy: .public)s")
             let filename = previewURL?.lastPathComponent ?? WorkoutClipStore.makeFilename(kind: currentKind)
             if duration < WorkoutClipRules.minimumDuration {
                 formError = String(localized: "Clips must be at least 2 seconds.")
@@ -272,6 +339,7 @@ final class WorkoutSessionController {
             isActivelyRecording = false
             formError = error.localizedDescription
             phase = .prep
+            AppLog.capture.error("stopRecording failed. \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -366,7 +434,15 @@ final class WorkoutSessionController {
     }
 
     func flipCamera() async {
-        try? await capture?.flipCamera()
+        do {
+            try await capture?.flipCamera()
+            if let capture {
+                cameraPosition = capture.currentPosition
+            }
+            AppLog.capture.info("Camera flipped. position=\(self.cameraPosition == .front ? "front" : "back", privacy: .public)")
+        } catch {
+            AppLog.capture.error("Camera flip failed. \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     func adjustAmount(_ change: Double) {

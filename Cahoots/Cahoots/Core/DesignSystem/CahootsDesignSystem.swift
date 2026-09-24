@@ -1109,6 +1109,83 @@ extension View {
     }
 }
 
+/// Centered confirmation for irreversible account and crew changes.
+struct CahootsConfirmationSheet: View {
+    let title: String
+    let message: String
+    let confirmTitle: String
+    var isDestructive: Bool = true
+    var isWorking: Bool = false
+    let onConfirm: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.large) {
+            VStack(alignment: .leading, spacing: AppSpacing.small) {
+                Text(title)
+                    .font(.title.bold())
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(message)
+                    .font(.body)
+                    .foregroundStyle(AppColors.secondaryInk)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            VStack(spacing: AppSpacing.small) {
+                confirmButton
+                .disabled(isWorking)
+                Button("Cancel", action: onCancel)
+                    .buttonStyle(OutlineButtonStyle())
+                    .disabled(isWorking)
+            }
+        }
+        .padding(AppSpacing.page)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .roundPage()
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+        .interactiveDismissDisabled(isWorking)
+    }
+
+    @ViewBuilder
+    private var confirmButton: some View {
+        let label = Button(action: onConfirm) {
+            if isWorking {
+                ProgressView()
+                    .tint(isDestructive ? Color.white : AppColors.onInk)
+                    .frame(maxWidth: .infinity, minHeight: 54)
+            } else {
+                Text(confirmTitle)
+            }
+        }
+        if isDestructive {
+            label.buttonStyle(DestructiveButtonStyle())
+        } else {
+            label.buttonStyle(PrimaryButtonStyle())
+        }
+    }
+}
+
+struct DestructiveButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .foregroundStyle(Color.white.opacity(isEnabled ? 1 : 0.7))
+            .frame(maxWidth: .infinity, minHeight: 54)
+            .padding(.horizontal, AppSpacing.medium)
+            .background(
+                AppColors.danger.opacity(isEnabled ? (configuration.isPressed ? 0.72 : 1) : 0.38),
+                in: Capsule()
+            )
+            .scaleEffect(!reduceMotion && configuration.isPressed && isEnabled ? 0.98 : 1)
+            .animation(reduceMotion ? nil : AppMotion.responsive, value: configuration.isPressed)
+    }
+}
+
 /// Shared settings block used by Profile, Group settings, and notification sheets.
 struct CahootsSettingsSection<Content: View>: View {
     let title: String
