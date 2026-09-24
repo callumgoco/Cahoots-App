@@ -14,6 +14,9 @@ final class CahootsAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificat
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        if ProcessInfo.processInfo.arguments.contains("-ephemeralData") {
+            UIView.setAnimationsEnabled(false)
+        }
         return true
     }
 

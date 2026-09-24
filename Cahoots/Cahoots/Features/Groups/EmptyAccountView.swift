@@ -40,7 +40,9 @@ struct EmptyAccountView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button("Sign out", systemImage: "rectangle.portrait.and.arrow.right") { showSignOut = true }
+                            .accessibilityIdentifier("account.signOut")
                         Button("Delete account", systemImage: "trash", role: .destructive) { showDelete = true }
+                            .accessibilityIdentifier("account.delete")
                     } label: {
                         Image(systemName: "ellipsis.circle")
                             .frame(minWidth: 44, minHeight: 44)

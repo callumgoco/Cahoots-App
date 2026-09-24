@@ -321,8 +321,14 @@ final class CahootsFlowUITests: XCTestCase {
         XCTAssertTrue(menu.waitForExistence(timeout: 5))
         // XCTest's scroll-to-visible fails on this toolbar item even though it is on screen.
         menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        XCTAssertTrue(app.buttons["Sign Out"].waitForExistence(timeout: 2))
-        XCTAssertTrue(app.buttons["Delete Account"].exists)
+        let signOut = app.descendants(matching: .any).matching(NSPredicate(
+            format: "identifier == 'account.signOut' OR label == 'Sign out'"
+        )).firstMatch
+        XCTAssertTrue(signOut.waitForExistence(timeout: 3))
+        let deleteAccount = app.descendants(matching: .any).matching(NSPredicate(
+            format: "identifier == 'account.delete' OR label == 'Delete account'"
+        )).firstMatch
+        XCTAssertTrue(deleteAccount.exists)
     }
 
     @MainActor
