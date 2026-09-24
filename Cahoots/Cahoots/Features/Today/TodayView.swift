@@ -13,7 +13,6 @@ struct TodayView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var showCheckIn = ProcessInfo.processInfo.arguments.contains("-showCheckIn")
-    @State private var confirmRecovery = false
     @State private var showBuilder = false
     @State private var clipUnlockHint: String?
     @State private var railPlaybackClip: WorkoutClip?
@@ -31,7 +30,6 @@ struct TodayView: View {
                     }
                     if let challenge = store.currentChallenge {
                         posterCard(challenge)
-                        WeekStrip(tokens: weekTokens(for: challenge))
                         CrewTodayStatusRail(
                             entries: store.todayMemberStatuses,
                             accessibilityID: "today.crewStrip",
@@ -56,14 +54,7 @@ struct TodayView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if showsStickyCheckIn {
                     checkInBar
-                        .padding(.horizontal, AppSpacing.page)
-                        .padding(.top, AppSpacing.small)
-                        .padding(.bottom, AppSpacing.small)
-                        .background(
-                            AppColors.page
-                                .shadow(color: AppColors.ink.opacity(0.06), radius: 16, y: -8)
-                                .mask(Rectangle().padding(.top, -24))
-                        )
+                        .cahootsStickyActionBar()
                 }
             }
             .refreshable { await store.refresh() }
@@ -82,12 +73,6 @@ struct TodayView: View {
             }
             .onChange(of: store.presentWorkoutSession) { _, shouldPresent in
                 if shouldPresent { showCheckIn = true }
-            }
-            .alert("Use a recovery day?", isPresented: $confirmRecovery) {
-                Button("Use recovery day") { Task { await store.useRecoveryDay() } }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This protects your streak and awards no points. You have \(store.remainingRecoveryDays) remaining.")
             }
             .roundPage()
         }
@@ -166,22 +151,20 @@ struct TodayView: View {
             VStack(alignment: .leading, spacing: AppSpacing.large) {
                 HStack {
                     StatusPill(text: statusText(requirementState, challenge: challenge), kind: statusKind(requirementState))
-                    Spacer()
+                    Spacer(minLength: AppSpacing.small)
                     if store.todaySubmission.map({ $0.syncState == .waiting || $0.syncState == .failed }) == true {
                         StatusPill(text: FriendFacingCopy.savedOnPhone, kind: .warning)
                     }
+                    Text(challenge.activityType)
+                        .font(.title3.bold())
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .multilineTextAlignment(.trailing)
                 }
 
                 switch requirementState {
                 case .scheduledIncomplete:
                     heroDeadlineCountdown(challenge)
-                    VStack(alignment: .leading, spacing: AppSpacing.micro) {
-                        Text(challenge.activityType)
-                            .font(.title2.bold())
-                        Text("Target · \(challenge.quantityLabel)")
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(AppColors.secondaryInk)
-                    }
                     rejectionStrip
 
                 case .complete:
@@ -244,6 +227,7 @@ struct TodayView: View {
                 }
 
                 MetricShelf(items: metricShelfItems(for: challenge, state: requirementState))
+                WeekStrip(tokens: weekTokens(for: challenge))
             }
         }
         .accessibilityElement(children: .combine)
@@ -253,6 +237,11 @@ struct TodayView: View {
     private func metricShelfItems(for challenge: CahootsChallenge, state: TodayRequirementState) -> [MetricShelfItem] {
         let streak = currentEntry?.currentStreak ?? 0
         let rank = store.currentRank.map { "#\($0)" } ?? "—"
+        let target = MetricShelfItem(
+            id: "target",
+            value: challenge.quantityLabel,
+            caption: String(localized: "target")
+        )
         let third: MetricShelfItem
         if state == .complete {
             third = MetricShelfItem(id: "points", value: "\(store.todayPoints)", caption: String(localized: "points"))
@@ -264,6 +253,7 @@ struct TodayView: View {
             )
         }
         return [
+            target,
             MetricShelfItem(id: "rank", value: rank, caption: String(localized: "rank")),
             MetricShelfItem(id: "streak", value: "\(streak)", caption: String(localized: "day streak")),
             third,
@@ -413,21 +403,9 @@ struct TodayView: View {
     }
 
     private var checkInBar: some View {
-        VStack(spacing: AppSpacing.small) {
-            Button(hasPendingFinishClip ? "Finish workout" : "Log workout") { showCheckIn = true }
-                .buttonStyle(PrimaryButtonStyle())
-                .accessibilityIdentifier("today.logWorkout")
-            if store.remainingRecoveryDays > 0 {
-                Button("Need a rest day?") {
-                    confirmRecovery = true
-                }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(AppColors.secondaryInk)
-                .frame(maxWidth: .infinity, minHeight: 44)
-                .accessibilityLabel("Need a rest day?")
-                .accessibilityIdentifier("today.rest")
-            }
-        }
+        Button(hasPendingFinishClip ? "Finish workout" : "Log workout") { showCheckIn = true }
+            .buttonStyle(PrimaryButtonStyle())
+            .accessibilityIdentifier("today.logWorkout")
     }
 
     @ViewBuilder
@@ -536,11 +514,11 @@ struct TodayView: View {
     private func accessibilitySummary(_ challenge: CahootsChallenge, state: TodayRequirementState) -> String {
         switch state {
         case .scheduledIncomplete: "\(challenge.quantityLabel) \(challenge.activityType) required today. Not yet completed."
-        case .complete: "Today’s requirement completed. \(store.todayPoints) points earned."
-        case .restDay: "No workout scheduled today. Rest day."
-        case .recovery: "Recovery day used. Current streak protected. No points awarded."
-        case .upcoming: "Challenge has not started. Starts \(challenge.startDate.formatted(date: .long, time: .omitted))."
-        case .closed: FriendFacingCopy.missedWindow
+        case .complete: "\(challenge.activityType). Today’s requirement completed. \(store.todayPoints) points earned."
+        case .restDay: "\(challenge.activityType). No workout scheduled today. Rest day."
+        case .recovery: "\(challenge.activityType). Recovery day used. Current streak protected. No points awarded."
+        case .upcoming: "\(challenge.activityType). Challenge has not started. Starts \(challenge.startDate.formatted(date: .long, time: .omitted))."
+        case .closed: "\(challenge.activityType). \(FriendFacingCopy.missedWindow)"
         }
     }
 }

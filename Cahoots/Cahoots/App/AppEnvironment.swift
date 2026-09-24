@@ -16,7 +16,9 @@ struct AppEnvironment {
         let keychain = KeychainStore()
         let repository: any AppRepository
         let authService: SupabaseAuthService?
-        if let configuration = SupabaseConfiguration.bundled {
+        let arguments = ProcessInfo.processInfo.arguments
+        let forceDemo = arguments.contains("-forceDemo") || arguments.contains("-marketingSeed")
+        if let configuration = SupabaseConfiguration.bundled, !forceDemo {
             repository = LiveAppRepository(configuration: configuration, keychain: keychain, modelContext: modelContext)
             authService = SupabaseAuthService(configuration: configuration, keychain: keychain)
         } else {
@@ -24,7 +26,6 @@ struct AppEnvironment {
             authService = nil
         }
         let clock = SystemAppClock()
-        let arguments = ProcessInfo.processInfo.arguments
         let entitlements: any EntitlementService = {
             if arguments.contains("-entitlement plus") {
                 return PlusEntitlementService()

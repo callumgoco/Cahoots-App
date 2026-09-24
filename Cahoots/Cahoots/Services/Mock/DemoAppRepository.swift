@@ -14,7 +14,7 @@ final class DemoAppRepository: AppRepository {
         if let existing = try store.loadFullSnapshot() {
             return existing
         }
-        let seed = SnapshotMigrator.migrate(DemoSeed.make())
+        let seed = makeSeed()
         try await save(seed)
         return seed
     }
@@ -25,9 +25,16 @@ final class DemoAppRepository: AppRepository {
 
     func reset() async throws -> DemoSnapshot {
         try store.clearAll()
-        let seed = SnapshotMigrator.migrate(DemoSeed.make())
+        let seed = makeSeed()
         try await save(seed)
         return seed
+    }
+
+    private func makeSeed() -> DemoSnapshot {
+        if ProcessInfo.processInfo.arguments.contains("-marketingSeed") {
+            return SnapshotMigrator.migrate(MarketingSeed.make())
+        }
+        return SnapshotMigrator.migrate(DemoSeed.make())
     }
 
     func syncSubmission(_ submission: Submission, challengeTimezone: String) async -> SubmissionSyncResult {

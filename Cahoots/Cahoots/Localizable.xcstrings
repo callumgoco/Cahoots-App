@@ -186,16 +186,6 @@
     "%lld" : {
 
     },
-    "%lld %@ · %lld-day streak" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld %2$@ · %3$lld-day streak"
-          }
-        }
-      }
-    },
     "%lld days" : {
 
     },
@@ -901,9 +891,6 @@
     "Group vote" : {
 
     },
-    "Grove" : {
-
-    },
     "Guidelines" : {
 
     },
@@ -1096,9 +1083,6 @@
 
     },
     "Name this round" : {
-
-    },
-    "Need a rest day?" : {
 
     },
     "Need an account? Create one" : {
@@ -1599,9 +1583,6 @@
     "Stop recording" : {
 
     },
-    "Studio" : {
-
-    },
     "Submit" : {
 
     },
@@ -1627,6 +1608,9 @@
 
     },
     "Tap to record" : {
+
+    },
+    "target" : {
 
     },
     "Target" : {
@@ -1700,9 +1684,6 @@
 
     },
     "This proposal is not open for voting." : {
-
-    },
-    "This protects your streak and awards no points. You have %lld remaining." : {
 
     },
     "This round" : {
@@ -1789,13 +1770,7 @@
     "Use %@ as the group emoji" : {
 
     },
-    "Use a recovery day?" : {
-
-    },
     "Use code %@ to join our private workout challenge." : {
-
-    },
-    "Use recovery day" : {
 
     },
     "Use this clip" : {

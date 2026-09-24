@@ -12,6 +12,10 @@ struct VotingView: View {
     private var votes: [Vote] { store.snapshot?.votes.filter { $0.proposalID == proposalID } ?? [] }
     private var myVote: Vote? { votes.first { $0.userID == store.currentUser?.id } }
     private var proposer: CahootsUser? { guard let id = proposal?.proposedBy else { return nil }; return store.snapshot?.users.first { $0.id == id } }
+    private var showsVoteActions: Bool {
+        guard let proposal, let userID = store.currentUser?.id else { return false }
+        return proposal.status == .voting && proposal.eligibleVoterIDs.contains(userID)
+    }
 
     var body: some View {
         ScrollView {
@@ -23,7 +27,7 @@ struct VotingView: View {
                     memberStatus(proposal)
                 }
                 .padding(AppSpacing.page)
-                .cahootsTabBarClearance()
+                .padding(.bottom, showsVoteActions ? 24 : 88)
             } else {
                 ContentUnavailableView("Proposal unavailable", systemImage: "doc.questionmark", description: Text("It may have been removed or replaced."))
             }
@@ -32,12 +36,10 @@ struct VotingView: View {
         .navigationBarTitleDisplayMode(.inline)
         .cahootsDrillInBar()
         .roundPage()
-        .safeAreaInset(edge: .bottom) {
-            if let proposal,
-               proposal.status == .voting,
-               proposal.eligibleVoterIDs.contains(store.currentUser?.id ?? UUID()) {
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if showsVoteActions {
                 voteActions
-                    .cahootsSheetFooter()
+                    .cahootsStickyActionBar()
             }
         }
         .task { await store.handleBecameActive() }

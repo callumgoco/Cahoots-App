@@ -50,7 +50,7 @@ extension AppStore {
             if let tabFlag = arguments.firstIndex(of: "-tab"),
                arguments.indices.contains(tabFlag + 1),
                let requestedTab = Int(arguments[tabFlag + 1]),
-               0...2 ~= requestedTab {
+               0...3 ~= requestedTab {
                 selectedTab = requestedTab
             }
             isSignedIn = true

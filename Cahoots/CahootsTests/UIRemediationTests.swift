@@ -49,7 +49,7 @@ struct UIRemediationTests {
     }
 
     @Test func colorThemesProvideDistinctLightAndDarkPalettes() {
-        #expect(AppColorTheme.allCases.count == 7)
+        #expect(AppColorTheme.allCases.count == 5)
         for theme in AppColorTheme.allCases {
             let light = theme.palette(for: .light)
             let dark = theme.palette(for: .dark)

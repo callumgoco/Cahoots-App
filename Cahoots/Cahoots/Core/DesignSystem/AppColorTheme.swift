@@ -5,9 +5,7 @@ import UIKit
 enum AppColorTheme: String, CaseIterable, Identifiable, Codable, Sendable {
     case mint
     case sky
-    case grove
     case volt
-    case studio
     case ember
     case tide
 
@@ -17,9 +15,7 @@ enum AppColorTheme: String, CaseIterable, Identifiable, Codable, Sendable {
         switch self {
         case .mint: String(localized: "Mint")
         case .sky: String(localized: "Sky")
-        case .grove: String(localized: "Grove")
         case .volt: String(localized: "Volt")
-        case .studio: String(localized: "Studio")
         case .ember: String(localized: "Ember")
         case .tide: String(localized: "Tide")
         }
@@ -79,28 +75,6 @@ enum AppColorTheme: String, CaseIterable, Identifiable, Codable, Sendable {
                     chip: UIColor(hex: 0x141C2E)
                 )
             )
-        case .grove:
-            // #9FE870 + #163300
-            ThemeDefinition(
-                soft: UIColor(hex: 0x9FE870),
-                bold: UIColor(hex: 0x163300),
-                light: AppThemePalette(
-                    page: UIColor(hex: 0x9FE870),
-                    card: UIColor(hex: 0x0F1A05),
-                    raised: UIColor(hex: 0x162408),
-                    ink: UIColor(hex: 0x163300),
-                    onInk: UIColor(hex: 0x9FE870),
-                    chip: UIColor(hex: 0x8AD960)
-                ),
-                dark: AppThemePalette(
-                    page: UIColor(hex: 0x163300),
-                    card: UIColor(hex: 0x1A3A08),
-                    raised: UIColor(hex: 0x214410),
-                    ink: UIColor(hex: 0x9FE870),
-                    onInk: UIColor(hex: 0x163300),
-                    chip: UIColor(hex: 0x1A3A08)
-                )
-            )
         case .volt:
             // #1F2329 + #B6FF2E
             ThemeDefinition(
@@ -121,28 +95,6 @@ enum AppColorTheme: String, CaseIterable, Identifiable, Codable, Sendable {
                     ink: UIColor(hex: 0xB6FF2E),
                     onInk: UIColor(hex: 0x1F2329),
                     chip: UIColor(hex: 0x2A2F36)
-                )
-            )
-        case .studio:
-            // #6D28D9 + #D7FF00
-            ThemeDefinition(
-                soft: UIColor(hex: 0xD7FF00),
-                bold: UIColor(hex: 0x6D28D9),
-                light: AppThemePalette(
-                    page: UIColor(hex: 0xD7FF00),
-                    card: UIColor(hex: 0x1A0A33),
-                    raised: UIColor(hex: 0x25124A),
-                    ink: UIColor(hex: 0x6D28D9),
-                    onInk: UIColor(hex: 0xD7FF00),
-                    chip: UIColor(hex: 0xC4E800)
-                ),
-                dark: AppThemePalette(
-                    page: UIColor(hex: 0x2E1065),
-                    card: UIColor(hex: 0x1A0A33),
-                    raised: UIColor(hex: 0x3B1A7A),
-                    ink: UIColor(hex: 0xD7FF00),
-                    onInk: UIColor(hex: 0x2E1065),
-                    chip: UIColor(hex: 0x3B1A7A)
                 )
             )
         case .ember:

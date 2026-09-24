@@ -35,12 +35,7 @@ final class CahootsFlowUITests: XCTestCase {
 
         // B seeded demo checks
         let app = launchDemo(additionalArguments: ["-stubWorkoutCapture", "-deadlineSoon"])
-        XCTAssertTrue(app.buttons["today.rest"].waitForExistence(timeout: 3))
-        let restLabel = app.buttons["today.rest"].label.lowercased()
-        XCTAssertTrue(
-            restLabel.contains("rest"),
-            "Rest control should be labeled for sighted/VoiceOver users, got: \(app.buttons["today.rest"].label)"
-        )
+        XCTAssertTrue(app.buttons["today.logWorkout"].waitForExistence(timeout: 3))
 
         app.buttons["today.logWorkout"].tap()
         XCTAssertTrue(app.buttons["workoutSession.chooseRecord"].waitForExistence(timeout: 3))

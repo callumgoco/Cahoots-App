@@ -148,7 +148,7 @@ struct CrewStandingsSection: View {
                                     isCurrentUser: entry.user.id == store.currentUser?.id,
                                     isProvisional: provisional(entry)
                                 )
-                                if entry.id != listEntries.last?.id { Divider().padding(.leading, 58) }
+                                if entry.id != listEntries.last?.id { Divider().padding(.leading, 64) }
                             }
                         }
                     }
@@ -383,51 +383,105 @@ struct LeaderboardRow: View {
     let entry: LeaderboardEntry
     let isCurrentUser: Bool
     var isProvisional = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        AdaptiveStack(spacing: AppSpacing.small) {
-            Text("\(rank)").font(.headline.monospacedDigit()).frame(width: 28)
-            AvatarView(user: entry.user, size: 40)
-                .overlay {
-                    if isCurrentUser {
-                        Circle().stroke(AppColors.page, lineWidth: 2)
-                    }
-                }
-            VStack(alignment: .leading, spacing: 3) {
-                Text(isCurrentUser ? "You" : entry.user.displayName)
-                    .font(.subheadline.bold())
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("\(entry.completedRequirements) \(entry.completedRequirements == 1 ? "completion" : "completions") · \(entry.currentStreak)-day streak")
-                    .font(.caption)
-                    .foregroundStyle(AppColors.secondaryInk)
-            }
-            Spacer(minLength: 0)
-            VStack(alignment: .trailing, spacing: 3) {
-                Text("\(entry.points.formatted()) pts\(isProvisional ? " · \(FriendFacingCopy.savedOnPhone.lowercased())" : "")")
-                    .font(.headline.monospacedDigit())
-                    .fixedSize(horizontal: false, vertical: true)
-                if let previous = entry.previousRank {
-                    let movement = previous - rank
-                    if movement == 0 {
-                        Text("Same")
-                            .font(.caption2.bold())
-                            .foregroundStyle(AppColors.secondaryInk)
-                            .accessibilityLabel("No rank change")
-                    } else {
-                        Label("\(abs(movement))", systemImage: movement > 0 ? "arrow.up" : "arrow.down")
-                            .font(.caption2.bold())
-                            .foregroundStyle(AppColors.secondaryInk)
-                            .accessibilityLabel("Moved \(movement > 0 ? "up" : "down") \(abs(movement)) places")
-                    }
-                }
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                accessibilityLayout
+            } else {
+                compactLayout
             }
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, 8)
         .padding(.horizontal, isCurrentUser ? 8 : 0)
         .background(isCurrentUser ? AppColors.page.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 12))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Rank \(rank), \(isCurrentUser ? "You" : entry.user.displayName), \(entry.points) points\(isProvisional ? ", saved on this phone" : ""), \(entry.completedRequirements) requirements completed, \(entry.currentStreak) day streak")
         .accessibilityIdentifier(isCurrentUser ? "leaderboard.currentUser" : "leaderboard.row.\(rank)")
+    }
+
+    private var compactLayout: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Text("\(rank)")
+                .font(.subheadline.weight(.semibold).monospacedDigit())
+                .foregroundStyle(AppColors.secondaryInk)
+                .frame(width: 18, alignment: .leading)
+            avatar
+            VStack(alignment: .leading, spacing: 1) {
+                Text(isCurrentUser ? "You" : entry.user.displayName)
+                    .font(.subheadline.bold())
+                    .lineLimit(1)
+                Text(detailLine)
+                    .font(.caption)
+                    .foregroundStyle(AppColors.secondaryInk)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(pointsLine)
+                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                    .lineLimit(1)
+                rankMovement
+            }
+            .layoutPriority(1)
+        }
+    }
+
+    private var accessibilityLayout: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.small) {
+            HStack(alignment: .center, spacing: 10) {
+                Text("\(rank)")
+                    .font(.headline.monospacedDigit())
+                    .frame(width: 28, alignment: .leading)
+                avatar
+                Text(isCurrentUser ? "You" : entry.user.displayName)
+                    .font(.headline.bold())
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Text(detailLine)
+                .font(.body)
+                .foregroundStyle(AppColors.secondaryInk)
+            Text(pointsLine)
+                .font(.headline.monospacedDigit())
+            rankMovement
+        }
+    }
+
+    private var avatar: some View {
+        AvatarView(user: entry.user, size: 36)
+            .overlay {
+                if isCurrentUser {
+                    Circle().stroke(AppColors.page, lineWidth: 2)
+                }
+            }
+    }
+
+    private var detailLine: String {
+        "\(entry.completedRequirements) \(entry.completedRequirements == 1 ? "completion" : "completions") · \(entry.currentStreak)-day streak"
+    }
+
+    private var pointsLine: String {
+        "\(entry.points.formatted()) pts\(isProvisional ? " · \(FriendFacingCopy.savedOnPhone.lowercased())" : "")"
+    }
+
+    @ViewBuilder
+    private var rankMovement: some View {
+        if let previous = entry.previousRank {
+            let movement = previous - rank
+            if movement == 0 {
+                Text("Same")
+                    .font(.caption2.bold())
+                    .foregroundStyle(AppColors.secondaryInk)
+                    .accessibilityLabel("No rank change")
+            } else {
+                Label("\(abs(movement))", systemImage: movement > 0 ? "arrow.up" : "arrow.down")
+                    .font(.caption2.bold())
+                    .foregroundStyle(movement > 0 ? AppColors.success : AppColors.secondaryInk)
+                    .labelStyle(.titleAndIcon)
+                    .accessibilityLabel("Moved \(movement > 0 ? "up" : "down") \(abs(movement)) places")
+            }
+        }
     }
 }
 
@@ -445,9 +499,12 @@ struct ChallengeResultsView: View {
                     Text("won \(summary.title)").foregroundStyle(AppColors.secondaryInk)
                 }
                 CahootsCard(elevated: true) {
-                    VStack(spacing: AppSpacing.medium) {
+                    VStack(spacing: 0) {
                         ForEach(Array(summary.topThree.enumerated()), id: \.element.id) { index, entry in
                             LeaderboardRow(rank: index + 1, entry: entry, isCurrentUser: entry.user.id == store.currentUser?.id)
+                            if index < summary.topThree.count - 1 {
+                                Divider().padding(.leading, 64)
+                            }
                         }
                     }
                 }
@@ -459,15 +516,18 @@ struct ChallengeResultsView: View {
                     VStack(alignment: .leading, spacing: AppSpacing.medium) {
                         CahootsSectionHeader(title: "Everyone’s round")
                         ForEach(summary.members) { member in
-                            AdaptiveStack(spacing: AppSpacing.small) {
-                                AvatarView(user: member.user, size: 36)
-                                Text(member.user.displayName).font(.subheadline.bold())
-                                Spacer()
+                            HStack(spacing: 10) {
+                                AvatarView(user: member.user, size: 32)
+                                Text(member.user.displayName)
+                                    .font(.subheadline.bold())
+                                    .lineLimit(1)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                                 Text(
                                     (Double(member.completionRate) / 100),
                                     format: .percent.precision(.fractionLength(0))
                                 )
-                                .font(.headline.monospacedDigit())
+                                .font(.subheadline.weight(.semibold).monospacedDigit())
+                                .layoutPriority(1)
                                 .accessibilityLabel(
                                     "\((Double(member.completionRate) / 100).formatted(.percent.precision(.fractionLength(0)))) complete"
                                 )

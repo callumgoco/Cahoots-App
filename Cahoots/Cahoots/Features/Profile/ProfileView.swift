@@ -14,13 +14,6 @@ struct ProfileView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(spacing: AppSpacing.large) {
-                    HStack(alignment: .center, spacing: AppSpacing.small) {
-                        Text("You")
-                            .font(.largeTitle.bold())
-                            .accessibilityAddTraits(.isHeader)
-                        Spacer(minLength: 0)
-                    }
-
                     profileHeader
 
                     settingsSection(title: "Your crews") {
@@ -190,7 +183,9 @@ struct ProfileView: View {
                     Text(friendlyTimezoneLabel(store.currentUser?.timezoneIdentifier))
                         .font(.subheadline)
                         .foregroundStyle(AppColors.secondaryInk)
-                    if store.mode == .demo { DemoModeBadge() }
+                    if store.mode == .demo, !ProcessInfo.processInfo.arguments.contains("-marketingSeed") {
+                        DemoModeBadge()
+                    }
                     Button("Edit name") { showEditName = true }.font(.subheadline.bold()).frame(minHeight: 44)
                 }
             }

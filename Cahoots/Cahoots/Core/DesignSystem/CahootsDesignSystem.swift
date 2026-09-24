@@ -230,6 +230,22 @@ extension View {
                     .mask(Rectangle().padding(.top, -32))
             )
     }
+
+    /// Docked page footer used by Log workout and other sticky screen actions.
+    /// The fill continues through the tab bar to the bottom edge of the screen.
+    func cahootsStickyActionBar() -> some View {
+        padding(.horizontal, AppSpacing.page)
+            .padding(.top, AppSpacing.small)
+            .padding(.bottom, AppSpacing.small)
+            .frame(maxWidth: .infinity)
+            .background(alignment: .top) {
+                AppColors.page
+                    .frame(maxWidth: .infinity, minHeight: 420, alignment: .top)
+                    .shadow(color: AppColors.ink.opacity(0.06), radius: 16, y: -8)
+                    .mask(Rectangle().padding(.top, -24))
+                    .ignoresSafeArea(edges: .bottom)
+            }
+    }
 }
 
 enum AvatarMark: Hashable, Sendable {
@@ -386,28 +402,21 @@ struct WeekStrip: View {
             ForEach(tokens) { token in
                 VStack(spacing: 6) {
                     Text(token.weekdayLabel)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(AppColors.secondaryInk)
+                        .font(.caption2.weight(labelWeight(for: token.state)))
+                        .foregroundStyle(labelColor(for: token.state))
                     Capsule(style: .continuous)
                         .fill(fill(for: token.state))
                         .frame(width: 28, height: 40)
                         .overlay {
-                            if token.state == .done {
-                                Image(systemName: "checkmark")
-                                    .font(.caption2.bold())
-                                    .foregroundStyle(AppColors.onInk)
-                            } else if token.state == .recovery {
-                                Image(systemName: "moon.fill")
-                                    .font(.caption2)
-                                    .foregroundStyle(AppColors.accent)
-                            } else if token.state == .missed {
-                                Image(systemName: "xmark")
-                                    .font(.caption2.bold())
-                                    .foregroundStyle(AppColors.ink.opacity(0.55))
-                            }
+                            Capsule(style: .continuous)
+                                .strokeBorder(stroke(for: token.state), style: strokeStyle(for: token.state))
+                        }
+                        .overlay {
+                            mark(for: token.state)
                         }
                 }
                 .frame(maxWidth: .infinity)
+                .opacity(opacity(for: token.state))
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(token.weekdayLabel), \(accessibilityLabel(for: token.state))")
             }
@@ -415,14 +424,81 @@ struct WeekStrip: View {
         .accessibilityElement(children: .contain)
     }
 
+    @ViewBuilder
+    private func mark(for state: WeekDayTokenState) -> some View {
+        switch state {
+        case .done:
+            Image(systemName: "checkmark")
+                .font(.caption2.bold())
+                .foregroundStyle(AppColors.onInk)
+        case .missed:
+            Image(systemName: "xmark")
+                .font(.caption2.bold())
+                .foregroundStyle(AppColors.danger)
+        case .recovery:
+            Image(systemName: "moon.fill")
+                .font(.caption2)
+                .foregroundStyle(AppColors.ink)
+        case .today:
+            Circle()
+                .fill(AppColors.ink)
+                .frame(width: 6, height: 6)
+        case .rest, .upcoming:
+            EmptyView()
+        }
+    }
+
     private func fill(for state: WeekDayTokenState) -> Color {
         switch state {
-        case .done: AppColors.accent
-        case .today: AppColors.accentSoft
-        case .recovery: AppColors.accentSoft
-        case .missed: AppColors.ink.opacity(0.22)
-        case .rest: AppColors.chip.opacity(0.55)
-        case .upcoming: AppColors.chip.opacity(0.45)
+        case .done: AppColors.ink
+        case .today: AppColors.ink.opacity(0.18)
+        case .recovery: AppColors.ink.opacity(0.14)
+        case .missed: AppColors.danger.opacity(0.22)
+        case .rest: AppColors.ink.opacity(0.08)
+        case .upcoming: .clear
+        }
+    }
+
+    private func stroke(for state: WeekDayTokenState) -> Color {
+        switch state {
+        case .today: AppColors.ink.opacity(0.9)
+        case .upcoming: AppColors.ink.opacity(0.28)
+        case .missed: AppColors.danger.opacity(0.45)
+        case .done, .recovery, .rest: .clear
+        }
+    }
+
+    private func strokeStyle(for state: WeekDayTokenState) -> StrokeStyle {
+        switch state {
+        case .upcoming:
+            StrokeStyle(lineWidth: 1.5, dash: [3, 3])
+        default:
+            StrokeStyle(lineWidth: state == .today || state == .missed ? 1.5 : 0)
+        }
+    }
+
+    private func labelColor(for state: WeekDayTokenState) -> Color {
+        switch state {
+        case .done, .today: AppColors.ink
+        case .missed: AppColors.danger.opacity(0.9)
+        case .recovery: AppColors.ink.opacity(0.85)
+        case .rest: AppColors.secondaryInk.opacity(0.7)
+        case .upcoming: AppColors.secondaryInk.opacity(0.55)
+        }
+    }
+
+    private func labelWeight(for state: WeekDayTokenState) -> Font.Weight {
+        switch state {
+        case .done, .today, .missed: .bold
+        default: .semibold
+        }
+    }
+
+    private func opacity(for state: WeekDayTokenState) -> Double {
+        switch state {
+        case .upcoming: 0.72
+        case .rest: 0.55
+        default: 1
         }
     }
 
@@ -450,7 +526,7 @@ struct MetricShelfItem: Identifiable, Equatable, Sendable {
     }
 }
 
-/// Quiet three-column metric row under a hero (rank / streak / recovery).
+/// Quiet metric row under a hero (target / rank / streak / recovery).
 struct MetricShelf: View {
     let items: [MetricShelfItem]
 
@@ -694,26 +770,26 @@ struct CrewTodayStatusRail: View {
 
     var body: some View {
         if !entries.isEmpty {
-            VStack(alignment: .leading, spacing: AppSpacing.small) {
-                Text(title)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(AppColors.secondaryInk)
-                if let summary {
-                    Text(summary)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(AppColors.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("crew.accountabilitySummary")
-                }
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: AppSpacing.medium) {
-                        ForEach(entries) { entry in
-                            memberCell(entry)
-                        }
+            CahootsCard {
+                VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                    CahootsSectionHeader(title: title)
+                    if let summary {
+                        Text(summary)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppColors.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("crew.accountabilitySummary")
                     }
-                    // Room for the status ring and badge so ScrollView does not clip them.
-                    .padding(.vertical, 6)
-                    .padding(.horizontal, 4)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: AppSpacing.medium) {
+                            ForEach(entries) { entry in
+                                memberCell(entry)
+                            }
+                        }
+                        // Room for the status ring and badge so ScrollView does not clip them.
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 4)
+                    }
                 }
             }
             .modifier(OptionalAccessibilityIdentifier(accessibilityID))
